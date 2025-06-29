@@ -1,0 +1,388 @@
+﻿{
+  "notes": [
+    {
+      "frame_length": 2,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 165,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 11,
+      "key": 69,
+      "lyric": "お",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 10,
+      "key": 69,
+      "lyric": "ん",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 10,
+      "key": 69,
+      "lyric": "し",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 11,
+      "key": 69,
+      "lyric": "つ",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "こ",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "う",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "か",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "が",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "す",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "く",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 20,
+      "key": 67,
+      "lyric": "う",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "き",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "の",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 71,
+      "lyric": "ふ",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "と",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "ん",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 21,
+      "key": 65,
+      "lyric": "ち",
+      "notelen": "F4"
+    },
+    {
+      "frame_length": 21,
+      "key": 64,
+      "lyric": "きゅ",
+      "notelen": "E4"
+    },
+    {
+      "frame_length": 20,
+      "key": 65,
+      "lyric": "う",
+      "notelen": "F4"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "の",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 69,
+      "lyric": "ま",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 20,
+      "key": 71,
+      "lyric": "わ",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "り",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 69,
+      "lyric": "ぽ",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 20,
+      "key": 67,
+      "lyric": "か",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "ぽ",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "か",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 20,
+      "key": 67,
+      "lyric": "に",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 42,
+      "key": 67,
+      "lyric": "す",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "る",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 20,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 21,
+      "key": 69,
+      "lyric": "な",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 21,
+      "key": 69,
+      "lyric": "が",
+      "notelen": "A4"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "い",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "あ",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "い",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "だ",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "で",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 20,
+      "key": 67,
+      "lyric": "き",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 67,
+      "lyric": "お",
+      "notelen": "G4"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "ん",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "が",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "あ",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "が",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "る",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "と",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "め",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "よ",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 21,
+      "key": 72,
+      "lyric": "お",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 71,
+      "lyric": "ち",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 21,
+      "key": 71,
+      "lyric": "きゅ",
+      "notelen": "B4"
+    },
+    {
+      "frame_length": 42,
+      "key": 72,
+      "lyric": "う",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 20,
+      "key": 74,
+      "lyric": "お",
+      "notelen": "D5"
+    },
+    {
+      "frame_length": 21,
+      "key": 74,
+      "lyric": "ん",
+      "notelen": "D5"
+    },
+    {
+      "frame_length": 21,
+      "key": 74,
+      "lyric": "だ",
+      "notelen": "D5"
+    },
+    {
+      "frame_length": 20,
+      "key": 72,
+      "lyric": "ん",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 83,
+      "key": 72,
+      "lyric": "か",
+      "notelen": "C5"
+    },
+    {
+      "frame_length": 2,
+      "key": null,
+      "lyric": "",
+      "notelen": "R"
+    }
+  ]
+}
