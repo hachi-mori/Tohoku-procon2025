@@ -1,4 +1,5 @@
-﻿# pragma once
+﻿// SynthesizeFromJSONFile.hpp
+# pragma once
 #include <Siv3D.hpp>
 
 namespace VOICEVOX

@@ -144,13 +144,7 @@
     <ClCompile Include="stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="VOICEVOX\SynthesizeFromJSONFile.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VOICEVOX\ConvertVVProjToScoreJSON.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VOICEVOX\GetSpeakers.cpp">
+    <ClCompile Include="VOICEVOX\VOICEVOX.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -819,13 +813,7 @@
     <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="VOICEVOX\SynthesizeFromJSONFile.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VOICEVOX\ConvertVVProjToScoreJSON.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VOICEVOX\GetSpeakers.hpp">
+    <ClInclude Include="VOICEVOX\VOICEVOX.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

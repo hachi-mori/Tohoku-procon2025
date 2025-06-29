@@ -74,34 +74,15 @@ void Main()
 			FilePath savePath = U"Score/" + inputfileName + U".json";
 
 			VOICEVOX::ConvertVVProjToScoreJSON(*inputpath, savePath);
-
 			Console << U"✅ 変換成功： " + savePath;
 
-			// ScoreQuery から SingQuery JSON ファイルを生成
-			const bool singQuerySuccess = VOICEVOX::SynthesizeFromJSONFile(savePath, singQueryFilePath, singFrameAudioQueryURL);
-			if (not singQuerySuccess)
-			{
-				Console(U"SingQuery の作成に失敗しました。");
-				return;
-			}
-
-			int32 speakerID = speakerIDs[SpeakerslistBoxState.selectedItemIndex.value()] + 3000;	// ハミングなので3000を加える
+			int32 speakerID = speakerIDs[SpeakerslistBoxState.selectedItemIndex.value()] + 3000;
 			URL frameSynthesisURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(speakerID);
-			Console << frameSynthesisURL;
 
-			// SingQuery から音声ファイルを生成
-			const bool audioSuccess = VOICEVOX::SynthesizeFromJSONFile(singQueryFilePath, outputAudioFilePath, frameSynthesisURL);
-			if (audioSuccess)
+			if (VOICEVOX::SynthesizeFromJSONFileWrapper(savePath, singQueryFilePath, outputAudioFilePath, singFrameAudioQueryURL, frameSynthesisURL))
 			{
-				Console(U"音声合成が成功しました。");
+				audio1 = Audio{ Audio::Stream, outputAudioFilePath };	// 音声ファイルを読み込み
 			}
-			else
-			{
-				Console(U"音声合成に失敗しました。");
-			}
-
-			Console << outputAudioFilePath;
-			audio1 = Audio{ Audio::Stream, outputAudioFilePath }; // 音声ファイルを読み込む
 		}
 
 		if (SimpleGUI::Button(U"▶️再生", Vec2{1500, 900}, unspecified, !audio1.isEmpty())) {

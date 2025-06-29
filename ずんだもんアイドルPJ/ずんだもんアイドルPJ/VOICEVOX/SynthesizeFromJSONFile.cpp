@@ -1,4 +1,5 @@
-﻿# include "../stdafx.h"
+﻿// SynthesizeFromJSONFile.cpp
+# include "../stdafx.h"
 
 namespace VOICEVOX
 {

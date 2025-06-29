@@ -414,6 +414,8 @@ gmon.out
 **/App/engine
 **/App/dll
 
+**/App/Query/SingQuery.json
+
 # --- Build artifacts (Visual Studio / MSVC) -------------------------
 **/Intermediate/**
 *.obj

@@ -120,9 +120,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="VOICEVOX\ConvertVVProjToScoreJSON.cpp" />
-    <ClCompile Include="VOICEVOX\GetSpeakers.cpp" />
-    <ClCompile Include="VOICEVOX\SynthesizeFromJSONFile.cpp" />
+    <ClCompile Include="VOICEVOX\VOICEVOX.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="App\engine\texture\box-shadow\128.png" />
@@ -330,9 +328,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="VOICEVOX\ConvertVVProjToScoreJSON.hpp" />
-    <ClInclude Include="VOICEVOX\GetSpeakers.hpp" />
-    <ClInclude Include="VOICEVOX\SynthesizeFromJSONFile.hpp" />
+    <ClInclude Include="VOICEVOX\VOICEVOX.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App\example\obj\blacksmith.obj">
