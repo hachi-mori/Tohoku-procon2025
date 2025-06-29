@@ -76,7 +76,7 @@ namespace VOICEVOX
 
 	// VOICEVOX プロジェクトファイル (VVProj) を Score JSON 形式に変換する
 	[[nodiscard]]
-    void ConvertVVProjToScoreJSON(const FilePath& vvprojPath, const FilePath& outJsonPath)
+	void ConvertVVProjToScoreJSON(const FilePath& vvprojPath, const FilePath& outJsonPath)
 	{
 		const JSON src = JSON::Load(vvprojPath);
 		const JSON& song = src[U"song"];
@@ -249,5 +249,143 @@ namespace VOICEVOX
 		Console(U"音声合成が成功しました。");
 		return true;
 	}
-}
 
+	// 分割ラッパー（maxFramesはデフォルト5000、必要なら上書き可）
+	[[nodiscard]]
+	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
+	const FilePath& inputPath,
+	const FilePath& intermediatePath,
+	const FilePath& outputPath,
+	const URL& queryURL,
+	const URL& synthesisURL,
+	size_t maxFrames)
+	{
+		// JSON読込
+		JSON score = JSON::Load(inputPath);
+		if (!score) {
+			Console(U"Score JSONの読み込み失敗");
+			return false;
+		}
+
+		// notes配列取得
+		const auto& notes = score[U"notes"];
+		if (!notes.isArray()) {
+			Console(U"notesが配列じゃない");
+			return false;
+		}
+
+		// 分割
+		Array<JSON> segments;
+		Array<JSON> currentSegment;
+		size_t frameSum = 0;
+		Optional<JSON> carriedOverRest;
+
+		for (const auto& note : notes.arrayView()) {
+			currentSegment << note;
+			frameSum += note[U"frame_length"].get<size_t>();
+			bool isRest = (note[U"notelen"].getString() == U"R");
+
+			if (frameSum >= maxFrames && isRest) {
+				// この休符のframe数を取得
+				const size_t restFrame = note[U"frame_length"].get<size_t>();
+				const size_t half1 = restFrame / 2;
+				const size_t half2 = restFrame - half1;
+
+				// 直前のセグメントの末尾に half1 を入れる
+				if (!currentSegment.isEmpty()) {
+					currentSegment.pop_back(); // この休符は一旦除去
+
+					JSON rest1;
+					rest1[U"frame_length"] = half1;
+					rest1[U"key"] = JSON();
+					rest1[U"lyric"] = U"";
+					rest1[U"notelen"] = U"R";
+					currentSegment << rest1;
+				}
+
+				// 休符の後半は次のセグメントの先頭に持ち越し
+				JSON rest2;
+				rest2[U"frame_length"] = half2;
+				rest2[U"key"] = JSON();
+				rest2[U"lyric"] = U"";
+				rest2[U"notelen"] = U"R";
+				carriedOverRest = rest2;
+
+				// セグメントとして保存
+				JSON segJson;
+				segJson[U"notes"] = currentSegment;
+				segments << segJson;
+
+				// 初期化
+				currentSegment.clear();
+				frameSum = 0;
+
+				// 後半休符を次セグメントに挿入
+				currentSegment << *carriedOverRest;
+			}
+		}
+
+		// 残りを追加
+		if (!currentSegment.isEmpty()) {
+			JSON segJson;
+			segJson[U"notes"] = currentSegment;
+			segments << segJson;
+		}
+
+		// 各セグメントで合成
+		Array<FilePath> tempWavs;
+		for (size_t i = 0; i < segments.size(); ++i) {
+			// 一時jsonファイル
+			FilePath tmpScore = U"tmp_score_" + Format(i) + U".json";
+			FilePath tmpQuery = U"tmp_query_" + Format(i) + U".json";
+			FilePath tmpWav = U"tmp_part_" + Format(i) + U".wav";
+			segments[i].save(tmpScore);
+
+			// ScoreQuery -> SingQuery
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpScore, tmpQuery, queryURL)) {
+				Console(U"SingQuery作成失敗(分割" + Format(i) + U")");
+				return false;
+			}
+
+			// SingQuery を作った直後に JSON を読み込んで修正
+			JSON query = JSON::Load(tmpQuery);
+			if (query) {
+				query[U"volumeScale"] = 1.0;              // 音量スケール（0.0〜1.0推奨）
+				query[U"outputSamplingRate"] = 44100;     // 出力レート
+				query[U"outputStereo"] = true;            // ステレオ出力ON
+				query.save(tmpQuery);                     // 上書き保存
+			}
+			else {
+				Console << U"SingQuery JSON の読み込みに失敗しました";
+				return false;
+			}
+
+			// SingQuery -> WAV
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, synthesisURL)) {
+				Console(U"音声合成失敗(分割" + Format(i) + U")");
+				return false;
+			}
+			tempWavs << tmpWav;
+			Wave part{ tmpWav };
+			Console << part.sampleRate(); // 各WAVのサンプリングレート
+		}
+
+		// 分割WAV連結
+		Wave joined;
+		for (const auto& wav : tempWavs) {
+			Wave part{ wav };
+			joined.append(part);
+		}
+		joined.save(outputPath);
+
+		// 一時ファイル削除
+		for (size_t i = 0; i < segments.size(); ++i) {
+			FileSystem::Remove(U"tmp_score_" + Format(i) + U".json");
+			FileSystem::Remove(U"tmp_query_" + Format(i) + U".json");
+			FileSystem::Remove(U"tmp_part_" + Format(i) + U".wav");
+		}
+
+		Console(U"分割合成＆連結が完了：" + outputPath);
+		return true;
+	}
+}

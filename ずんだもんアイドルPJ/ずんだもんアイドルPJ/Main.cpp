@@ -23,7 +23,7 @@ void Main()
 
 	// 出力ファイルのパス
 	const FilePath singQueryFilePath = U"Query/SingQuery.json";
-	const FilePath outputAudioFilePath = U"Voice/voice.wav";
+	FilePath outputAudioFilePath = U"Voice/voice.wav";
 
 	// 使用するスピーカー ID
 	int32 speakerID; // スピーカー ID を指定
@@ -40,10 +40,10 @@ void Main()
 	{
 		for (const auto& style : speaker.styles)
 		{
-			if (speaker.name == U"ずんだもん") {
+			//if (speaker.name == U"ずんだもん") {
 				speakers << U"{}（{}）"_fmt(speaker.name, style.name);
 				speakerIDs << style.id;
-			}
+			//}
 		}
 	}
 	SpeakerslistBoxState = ListBoxState{ speakers };
@@ -68,18 +68,19 @@ void Main()
 			//Console << U"🎵 入力ファイル：" + inputfileName + U".vvproj";
 		}
 
-		if (SimpleGUI::Button(U"✅ 変換 ＆ 🎵 音声合成", Vec2{ 1500, 850 },unspecified, inputpath.has_value()))
+		if (SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 850 },unspecified, inputpath.has_value()))
 		{
 			String inputfileName = FileSystem::BaseName(*inputpath);
 			FilePath savePath = U"Score/" + inputfileName + U".json";
+			FilePath outputAudioFilePath = U"Voice/" + inputfileName + U"-" + speakers[SpeakerslistBoxState.selectedItemIndex.value()] + U".wav";
 
 			VOICEVOX::ConvertVVProjToScoreJSON(*inputpath, savePath);
-			Console << U"✅ 変換成功： " + savePath;
+			//Console << U"✅ 変換成功： " + savePath;
 
 			int32 speakerID = speakerIDs[SpeakerslistBoxState.selectedItemIndex.value()] + 3000;
 			URL frameSynthesisURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(speakerID);
 
-			if (VOICEVOX::SynthesizeFromJSONFileWrapper(savePath, singQueryFilePath, outputAudioFilePath, singFrameAudioQueryURL, frameSynthesisURL))
+			if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(savePath, singQueryFilePath, outputAudioFilePath, singFrameAudioQueryURL, frameSynthesisURL, 3000))
 			{
 				audio1 = Audio{ Audio::Stream, outputAudioFilePath };	// 音声ファイルを読み込み
 			}
