@@ -14,10 +14,13 @@ namespace VOICEVOX
 
 	Array<Speaker> GetSpeakers(Duration timeout = SecondsF{ 5.0 });
 
-	String MidiToName(int midi);
-	int CalcFrameLen(int64 ticks, double bpm, double tpqn, double& carry);
+	// vvproj のトラック数を返す
+	size_t GetVVProjTrackCount(const FilePath& vvprojPath);
 
-	void ConvertVVProjToScoreJSON(const FilePath& vvprojPath, const FilePath& outJsonPath);
+	// trackIndex 番（0 始まり）のトラックだけ vvproj → Score JSON に変換
+	bool   ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
+									const FilePath& outJsonPath,
+									size_t trackIndex = 0);
 
 	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath, const FilePath& savePath, const URL& synthesisURL, const Duration timeout = SecondsF{ 5.0 });
 

@@ -3,173 +3,190 @@
 
 namespace VOICEVOX
 {
-	// 話者情報を取得する
-	[[nodiscard]]
+	// -----------------------------------------------------------------------------
+	// 1. 共有ユーティリティ
+	// -----------------------------------------------------------------------------
+	namespace
+	{
+		constexpr double kFrameRate = 93.75;
+
+		String MidiToName(int midi)
+		{
+			static const String names[12] =
+			{ U"C", U"C#", U"D", U"D#", U"E", U"F",
+			  U"F#", U"G", U"G#", U"A", U"A#", U"B" };
+
+			const int octave = midi / 12 - 1;
+			return names[midi % 12] + Format(octave);
+		}
+
+		int CalcFrameLen(int64 ticks, double bpm, double tpqn, double& carry)
+		{
+			const double beats = ticks / tpqn;
+			const double sec = beats * (60.0 / bpm);
+			const double frames = sec * kFrameRate + carry;
+
+			const int   flen = Max(1, static_cast<int>(std::floor(frames + 0.5)));
+			carry = frames - flen;        // 誤差キャリー
+			return flen;
+		}
+
+		double GetFirstBPM(const JSON& song)
+		{
+			if (song[U"tempos"].isArray()
+			 && (song[U"tempos"].arrayView().begin() != song[U"tempos"].arrayView().end())
+			 && song[U"tempos"][0][U"bpm"].isNumber())
+			{
+				return song[U"tempos"][0][U"bpm"].get<double>();
+			}
+			return 120.0;  // デフォルト
+		}
+	} // unnamed-namespace
+
+	// -----------------------------------------------------------------------------
+	// 2. HTTP: Speaker 一覧
+	// -----------------------------------------------------------------------------
 	Array<Speaker> GetSpeakers(const Duration timeout)
 	{
 		constexpr URLView url = U"http://localhost:50021/speakers";
 
 		AsyncHTTPTask task = SimpleHTTP::GetAsync(url, {});
+		Stopwatch     sw{ StartImmediately::Yes };
 
-		Stopwatch stopwatch{ StartImmediately::Yes };
-
-		while (not task.isReady())
+		while (!task.isReady())
 		{
-			if (timeout <= stopwatch)
+			if (timeout <= sw)
 			{
 				task.cancel();
 				return{};
 			}
-
 			System::Sleep(1ms);
 		}
-
-		if (not task.getResponse().isOK())
-		{
+		if (!task.getResponse().isOK())
 			return{};
-		}
 
 		const JSON json = task.getAsJSON();
-		Array<Speaker> speakers;
+		Array<Speaker> out;
 
-		for (auto&& [i, speaker] : json)
+		for (auto&& [_, sp] : json)
 		{
-			Speaker s;
-			s.name = speaker[U"name"].get<String>();
+			Speaker s;  s.name = sp[U"name"].get<String>();
 
-			for (auto&& [k, style] : speaker[U"styles"])
+			for (auto&& [__, st] : sp[U"styles"])
 			{
-				Speaker::Style st;
-				st.name = style[U"name"].get<String>();
-				st.id = style[U"id"].get<int32>();
-				s.styles.push_back(st);
+				Speaker::Style tmp;
+				tmp.name = st[U"name"].get<String>();
+				tmp.id = st[U"id"].get<int32>();
+				s.styles << tmp;
 			}
-
-			speakers.push_back(s);
+			out << s;
 		}
-
-		return speakers;
+		return out;
 	}
 
-	constexpr double kFrameRate = 93.75;
-
-	String MidiToName(int midi)
-	{
-		static const String names[12] = {
-			U"C", U"C#", U"D", U"D#", U"E", U"F",
-			U"F#", U"G", U"G#", U"A", U"A#", U"B"
-		};
-		const int octave = midi / 12 - 1;
-		return names[midi % 12] + Format(octave);
-	}
-
-	int CalcFrameLen(int64 ticks, double bpm, double tpqn, double& carry)
-	{
-		double beats = ticks / tpqn;
-		double seconds = beats * (60.0 / bpm);
-		double rawFrames = seconds * kFrameRate;
-		double total = rawFrames + carry;
-		int frameLen = static_cast<int>(std::floor(total + 0.5));
-		carry = total - frameLen;
-		return Max(1, frameLen);
-	}
-
-	// VOICEVOX プロジェクトファイル (VVProj) を Score JSON 形式に変換する
-	[[nodiscard]]
-	void ConvertVVProjToScoreJSON(const FilePath& vvprojPath, const FilePath& outJsonPath)
+	// -----------------------------------------------------------------------------
+	// 3. vvproj ヘルパ
+	// -----------------------------------------------------------------------------
+	size_t GetVVProjTrackCount(const FilePath& vvprojPath)
 	{
 		const JSON src = JSON::Load(vvprojPath);
 		const JSON& song = src[U"song"];
 
-		// 解像度(tpqn)
-		double tpqn = 480.0;
-		if (song[U"tpqn"].isNumber())
-		{
-			tpqn = song[U"tpqn"].get<double>();
-		}
+		if (!song || !song[U"tracks"].isObject())
+			return 0;
 
-		// BPM の取得 (最初の要素)
-		double bpm = 120.0;
-		if (song[U"tempos"].isArray())
+		if (song[U"trackOrder"].isArray())
+			return song[U"trackOrder"].size();
+
+		return song[U"tracks"].size();
+	}
+
+	// vvproj → Score JSON（指定トラックだけ）
+	bool ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
+								  const FilePath& outJsonPath,
+								  size_t trackIndex)
+	{
+		const JSON src = JSON::Load(vvprojPath);
+		const JSON& song = src[U"song"];
+
+		if (!song || !song[U"tracks"].isObject())
+			return false;
+
+		// ---------------------------------- ① 目的トラック抽出
+		JSON track;
+		bool found = false;
+
+		if (song[U"trackOrder"].isArray() &&
+			trackIndex < song[U"trackOrder"].size())
 		{
-			for (const auto& tempo : song[U"tempos"].arrayView())
+			const String key = song[U"trackOrder"][trackIndex].getString();
+			if (song[U"tracks"][key].isObject())
 			{
-				bpm = tempo[U"bpm"].get<double>();
-				break;
+				track = song[U"tracks"][key];
+				found = true;
 			}
 		}
+		if (!found)                                   // trackOrder 無し fallback
+		{
+			size_t cur = 0;
+			for (auto&& [__, tr] : song[U"tracks"])
+			{
+				if (cur == trackIndex)
+				{
+					track = tr;
+					found = true;
+					break;
+				}
+				++cur;
+			}
+		}
+		if (!found || !track[U"notes"].isArray())
+			return false;
+
+		// ---------------------------------- ② スコア変換
+		const double tpqn = song[U"tpqn"].isNumber()
+			? song[U"tpqn"].get<double>() : 480.0;
+		const double bpm = GetFirstBPM(song);
 
 		Array<JSON> outNotes;
 		double carry = 0.0;
 
-		// 最初に 2-frame の休符
-		{
-			JSON rest;
-			rest[U"frame_length"] = 2;
-			rest[U"key"] = JSON();
-			rest[U"lyric"] = U"";
-			rest[U"notelen"] = U"R";
-			outNotes << rest;
-		}
-
-		// トラック取得 (最初のトラックのみ)
-		if (song[U"tracks"].isObject())
-		{
-			for (const auto& trackPair : song[U"tracks"])  // オブジェクトのイテレータ
+		auto putRest = [&](int f)
 			{
-				const JSON& track = trackPair.value;
-				if (track[U"notes"].isArray())
-				{
-					int64 prevEnd = 0;
-					for (const auto& n : track[U"notes"].arrayView())
-					{
-						const int64 pos = n[U"position"].get<int64>();
-						const int64 dur = n[U"duration"].get<int64>();
-						const int    midi = n[U"noteNumber"].get<int>();
-						const String lyric = n[U"lyric"].getString();
+				JSON r;
+				r[U"frame_length"] = f;
+				r[U"key"] = JSON();
+				r[U"lyric"] = U"";
+				r[U"notelen"] = U"R";
+				outNotes << r;
+			};
+		putRest(2);                                   // 開頭休符 2frame
 
-						// ギャップ(休符)
-						if (const int64 gapTicks = pos - prevEnd; gapTicks > 0)
-						{
-							int gapFrames = CalcFrameLen(gapTicks, bpm, tpqn, carry);
-							JSON gap;
-							gap[U"frame_length"] = gapFrames;
-							gap[U"key"] = JSON();
-							gap[U"lyric"] = U"";
-							gap[U"notelen"] = U"R";
-							outNotes << gap;
-						}
-
-						// 実音符
-						int noteFrames = CalcFrameLen(dur, bpm, tpqn, carry);
-						JSON note;
-						note[U"frame_length"] = noteFrames;
-						note[U"key"] = midi;
-						note[U"lyric"] = lyric;
-						note[U"notelen"] = MidiToName(midi);
-						outNotes << note;
-
-						prevEnd = pos + dur;
-					}
-				}
-				break;  // 最初のトラックのみ
-			}
-		}
-
-		// 最後に 2-frame の休符
+		int64 prevEnd = 0;
+		for (auto&& note : track[U"notes"].arrayView())
 		{
-			JSON rest;
-			rest[U"frame_length"] = 2;
-			rest[U"key"] = JSON();
-			rest[U"lyric"] = U"";
-			rest[U"notelen"] = U"R";
-			outNotes << rest;
-		}
+			const int64 pos = note[U"position"].get<int64>();
+			const int64 dur = note[U"duration"].get<int64>();
+			const int   midi = note[U"noteNumber"].get<int>();
+			const String lyr = note[U"lyric"].getString();
 
-		// 結果を保存
-		JSON result;
-		result[U"notes"] = outNotes;
-		result.save(outJsonPath);
+			if (const int64 gap = pos - prevEnd; gap > 0)
+				putRest(CalcFrameLen(gap, bpm, tpqn, carry));
+
+			JSON n;
+			n[U"frame_length"] = CalcFrameLen(dur, bpm, tpqn, carry);
+			n[U"key"] = midi;
+			n[U"lyric"] = lyr;
+			n[U"notelen"] = MidiToName(midi);
+			outNotes << n;
+
+			prevEnd = pos + dur;
+		}
+		putRest(2);                                   // 終端休符
+
+		JSON res; res[U"notes"] = outNotes;
+		res.save(outJsonPath);
+		return true;
 	}
 
 	// JSON ファイルから音声合成を行う

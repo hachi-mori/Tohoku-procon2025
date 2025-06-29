@@ -1,111 +1,146 @@
-﻿# include "stdafx.h"
+﻿#include "stdafx.h"  
 
-void Main()
-{
+void Main()  
+{  
+    const size_t kMaxCharacters = 5;              // 上限  
+    size_t charCount = 0;                         // vvproj 読込で決定  
 
-	Window::SetTitle(U"SHINE VOX");
-	Window::Resize(1920, 1080);
-	Scene::SetResizeMode(ResizeMode::Keep);
-	Window::SetStyle(WindowStyle::Sizable);
-	//Window::SetFullscreen(true);
-	//Scene::SetBackground(Color{ 226, 0, 128 });
+    Window::SetTitle(U"SHINE VOX");  
+    Window::Resize(1920, 1080);  
+    Scene::SetResizeMode(ResizeMode::Keep);  
+    Window::SetStyle(WindowStyle::Sizable);  
 
-	// 背景画像
-	const Texture background1 = Texture{ U"Texture/background1.jpg" };
-	// キャラクター画像
-	Texture characterTexture1 = Texture{ U"Texture/Character/ずんだもん（ノーマル）.png" };
+    const Texture background{ U"Texture/background1.jpg" };  
 
-	// 音声ファイルの読み込み
-	Audio audio1;
+    // キャラ用コンテナ（最大数で確保）  
+    Array<Texture> characterTex(kMaxCharacters,  
+        Texture{ U"Texture/Character/ずんだもん（ノーマル）.png" });  
+    Array<Audio> audios(kMaxCharacters);  
 
-	// ファイルパス
-	Optional<FilePath> inputpath;
+    // スピーカー GUI  
+    Array<String> speakers;  
+    Array<int32> speakerIDs;  
+    for (const auto& spk : VOICEVOX::GetSpeakers())  
+        for (const auto& st : spk.styles)  
+        {
+			if (spk.name == U"ずんだもん") {
+				speakers << U"{}（{}）"_fmt(spk.name, st.name);
+				speakerIDs << st.id;
+			}
+        }
 
-	// 出力ファイルのパス
-	const FilePath singQueryFilePath = U"Query/SingQuery.json";
-	FilePath outputAudioFilePath = U"Voice/voice.wav";
+    Array<ListBoxState> speakerUI(kMaxCharacters, ListBoxState{ speakers });  
+    Array<Optional<uint64>> prevSel(kMaxCharacters);  
 
-	// 使用するスピーカー ID
-	int32 speakerID; // スピーカー ID を指定
+    // レイアウト  
+    constexpr double kCenterY = 240;  
+    constexpr Vec2 kListOff{ -150, 200 };  
 
-	// VOICEVOX 合成用 URL
-	const URL singFrameAudioQueryURL = U"http://localhost:50021/sing_frame_audio_query?speaker=6000";
-	URL frameSynthesisURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(speakerID);
+    // 共通パス  
+    Optional<FilePath> vvprojPath;  
+    const FilePath singQuery = U"Query/SingQuery.json";  
+    const URL queryURL = U"http://localhost:50021/sing_frame_audio_query?speaker=6000";  
 
-	// VOICEVOX Speaker の取得
-	Array<String> speakers;
-	Array<int32> speakerIDs;
-	ListBoxState SpeakerslistBoxState;
-	for (const auto& speaker : VOICEVOX::GetSpeakers())
-	{
-		for (const auto& style : speaker.styles)
+    //--------------------------------------------------  
+    while (System::Update())  
+    {  
+        background.draw(Arg::center = Scene::Center());  
+
+        // vvproj 選択  
+        if (SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 780 }))  
+        {  
+            vvprojPath = Dialog::OpenFile({ { U"VOICEVOX Project", { U"vvproj" } } });  
+            if (vvprojPath)  
+            {  
+                charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath), kMaxCharacters);  
+            }  
+        }  
+        if (charCount == 0) continue;           // 未選択  
+
+        // 横位置を均等割り  
+        Array<Vec2> centers;  
+        const double step = Scene::Width() / (charCount + 1);  
+        for (size_t i = 0; i < charCount; ++i)  
+            centers << Vec2{ step * (i + 1), kCenterY };  
+
+		// キャラ描画 + ListBox
+		for (size_t i = 0; i < charCount; ++i)
 		{
-			//if (speaker.name == U"ずんだもん") {
-				speakers << U"{}（{}）"_fmt(speaker.name, style.name);
-				speakerIDs << style.id;
-			//}
-		}
-	}
-	SpeakerslistBoxState = ListBoxState{ speakers };
-	SpeakerslistBoxState.selectedItemIndex = 0;  // 初期選択
-	s3d::Optional<uint64> previousSpeakersSelectedIndex;
-
-	while (System::Update())
-	{
-		background1.draw(Arg::center = Scene::Center());
-		characterTexture1.draw(Arg::center = Scene::Center()).scaled(0.5);
-
-		//ClearConsole();
-
-		if (SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 800 }, unspecified))
-		{
-			inputpath = Dialog::OpenFile({ { U"VOICEVOX Project file", { U"vvproj" } } });
-		}
-
-		if (inputpath)
-		{
-			String inputfileName = FileSystem::BaseName(*inputpath);
-			//Console << U"🎵 入力ファイル：" + inputfileName + U".vvproj";
-		}
-
-		if (SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 850 },unspecified, inputpath.has_value()))
-		{
-			String inputfileName = FileSystem::BaseName(*inputpath);
-			FilePath savePath = U"Score/" + inputfileName + U".json";
-			FilePath outputAudioFilePath = U"Voice/" + inputfileName + U"-" + speakers[SpeakerslistBoxState.selectedItemIndex.value()] + U".wav";
-
-			VOICEVOX::ConvertVVProjToScoreJSON(*inputpath, savePath);
-			//Console << U"✅ 変換成功： " + savePath;
-
-			int32 speakerID = speakerIDs[SpeakerslistBoxState.selectedItemIndex.value()] + 3000;
-			URL frameSynthesisURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(speakerID);
-
-			if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(savePath, singQueryFilePath, outputAudioFilePath, singFrameAudioQueryURL, frameSynthesisURL, 3000))
+			// 音量によってスケールと透明度を決定
+			double scale = 0.5;
+			double alpha = 0.5;
+			if (audios[i].isPlaying())
 			{
-				audio1 = Audio{ Audio::Stream, outputAudioFilePath };	// 音声ファイルを読み込み
+				FFTResult fft;
+				FFT::Analyze(fft, audios[i]);
+
+				// 一部周波数帯域だけのエネルギーを取ることもできるが、今回は全体で
+				double energy = std::accumulate(fft.buffer.begin(), fft.buffer.end(), 0.0);
+				energy /= fft.buffer.size(); // 平均値
+
+				// デバッグ表示
+				//Print << U"キャラ{} energy: {:.5f}"_fmt(i, energy);
+
+				// 閾値は小さめに設定することで反応性アップ
+				if (energy > 0.00001)
+				{
+					scale = 0.55;
+					alpha = 1.0;
+				}
+			}
+			characterTex[i].scaled(scale).drawAt(centers[i], ColorF(1.0, alpha));
+
+			SimpleGUI::ListBox(speakerUI[i], centers[i] + kListOff, 300, 250);
+
+			// 選択変更時に立ち絵切替
+			if (speakerUI[i].selectedItemIndex != prevSel[i])
+			{
+				prevSel[i] = speakerUI[i].selectedItemIndex;
+				const String sel = speakers[speakerUI[i].selectedItemIndex.value()];
+				FilePath tex = U"Texture/Character/" + sel + U".png";
+				if (!FileSystem::Exists(tex))
+					tex = U"Texture/Character/ずんだもん（ノーマル）.png";
+				characterTex[i] = Texture{ tex };
 			}
 		}
 
-		if (SimpleGUI::Button(U"▶️再生", Vec2{1500, 900}, unspecified, !audio1.isEmpty())) {
-			audio1.play();
-		}
+        // -------------- 音声合成 -----------------  
+        if (SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 830 }, unspecified, vvprojPath.has_value()))  
+        {  
+            const String base = FileSystem::BaseName(*vvprojPath);  
 
-		SimpleGUI::ListBox(SpeakerslistBoxState, Vec2{ 400, 250 }, 300, 250);
+            for (size_t i = 0; i < charCount; ++i)  
+            {  
+                // vvproj → Score JSON  
+                FilePath score = U"Score/" + base + U"_track" + Format(i + 1) + U".json";  
+                if (!VOICEVOX::ConvertVVProjToScoreJSON(*vvprojPath, score, i))  
+                    continue;  
 
-		if (SpeakerslistBoxState.selectedItemIndex != previousSpeakersSelectedIndex)
-		{
-			previousSpeakersSelectedIndex = SpeakerslistBoxState.selectedItemIndex;
-			String selectedSpeaker = speakers[SpeakerslistBoxState.selectedItemIndex.value()];
-			FilePath base = U"Texture/Character/";
-			FilePath texPath = base + selectedSpeaker + U".png";
+                // speaker ID  
+                const uint64 sel = speakerUI[i].selectedItemIndex.value_or(0);  
+                const int32 spkID = speakerIDs[sel] + 3000;  
 
-			// ファイルが無ければデフォルトへ
-			if (!FileSystem::Exists(texPath))
-			{
-				texPath = base + U"ずんだもん（ノーマル）.png";
-			}
-			characterTexture1 = Texture{ texPath };
+                const URL synthURL =  
+                    U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);  
 
-		}
-	}
+                FilePath wav = U"Voice/" + base + U"-" + speakers[sel]  
+                    + U"_track" + Format(i + 1) + U".wav";  
+
+                if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(  
+                    score, singQuery, wav, queryURL, synthURL, 3000))  
+                {
+					audios[i] = Audio{ wav };
+                }  
+            }  
+        }  
+
+        // -------------- 再生 ---------------------  
+        const bool playable = std::any_of(audios.begin(), audios.begin() + charCount,  
+                                          [](const Audio& a) {return !a.isEmpty(); });  
+
+        if (SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 880 }, unspecified, playable))  
+            for (size_t i = 0; i < charCount; ++i) if (!audios[i].isEmpty()) audios[i].play();  
+    }  
 }
+    // Fix for C2014: Ensure no invalid characters or spaces before the `#` directive.  
+    #include "stdafx.h"
