@@ -353,9 +353,9 @@ namespace VOICEVOX
 		Array<FilePath> tempWavs;
 		for (size_t i = 0; i < segments.size(); ++i) {
 			// 一時jsonファイル
-			FilePath tmpScore = U"tmp_score_" + Format(i) + U".json";
-			FilePath tmpQuery = U"tmp_query_" + Format(i) + U".json";
-			FilePath tmpWav = U"tmp_part_" + Format(i) + U".wav";
+			FilePath tmpScore = U"tmp/tmp_score_" + Format(i) + U".json";
+			FilePath tmpQuery = U"tmp/tmp_query_" + Format(i) + U".json";
+			FilePath tmpWav = U"tmp/tmp_part_" + Format(i) + U".wav";
 			segments[i].save(tmpScore);
 
 			// ScoreQuery -> SingQuery
@@ -384,7 +384,7 @@ namespace VOICEVOX
 			}
 			tempWavs << tmpWav;
 			Wave part{ tmpWav };
-			Console << part.sampleRate(); // 各WAVのサンプリングレート
+			//Console << part.sampleRate(); // 各WAVのサンプリングレート
 		}
 
 		// 分割WAV連結
