@@ -24,8 +24,6 @@ namespace VOICEVOX
 
 	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath, const FilePath& savePath, const URL& synthesisURL, const Duration timeout = SecondsF{ 5.0 });
 
-	bool SynthesizeFromJSONFileWrapper(const FilePath& inputPath, const FilePath& intermediatePath, const FilePath& outputPath, const URL& queryURL, const URL& synthesisURL);
-
 	bool SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,
 		const FilePath& intermediatePath,

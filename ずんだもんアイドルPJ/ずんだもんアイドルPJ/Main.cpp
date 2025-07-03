@@ -1,19 +1,29 @@
-﻿#include "stdafx.h"  
+﻿#include "stdafx.h"
 
 void Main()
 {
+	Window::SetTitle(U"SHINE VOX");
+	Window::Resize(1920, 1080);
+	Scene::SetResizeMode(ResizeMode::Keep);
+	Window::SetStyle(WindowStyle::Sizable);
+
 	const size_t kMaxCharacters = 5;              // 上限  
 	size_t charCount = 0;                         // vvproj 読込で決定  
 
-	Window::SetTitle(U"SHINE VOX");
-	Window::Resize(1920, 1080);
-	Scene::SetResizeMode(ResizeMode::Virtual);
-	Window::SetStyle(WindowStyle::Sizable);
-
 	// 背景画像
 	const Texture background{ U"Texture/background1.jpg" };
+	const Texture song_title{ U"Texture/song_title.png" };
 
-	// カラオケ音声
+	// テキスト表示
+	const FilePath fontpath = (U"C:/Program Files/Steinberg/UR-C/font/mplus-1c-medium.ttf");
+	const Font font{ FontMethod::MSDF, 48 , fontpath };
+
+	// 時間を管理する変数
+	double accumulatedTime = 0;
+	bool waitingToPlay = false;
+	double waitTimer = 0.0;
+
+	// 伴奏音声
 	Audio audio_inst;
 
 	// キャラ用コンテナ（最大数で確保）  
@@ -21,14 +31,14 @@ void Main()
 		Texture{ U"Texture/Character/ずんだもん（ノーマル）.png" });
 	Array<Audio> audios(kMaxCharacters);
 
-
 	// スピーカー GUI  
 	Array<String> speakers;
 	Array<int32> speakerIDs;
 	for (const auto& spk : VOICEVOX::GetSpeakers())
 		for (const auto& st : spk.styles)
 		{
-			if (spk.name == U"ずんだもん" && st.name != U"ヒソヒソ") {
+//			if (spk.name == U"ずんだもん" && st.name != U"ささやき") {
+			if (st.name == U"ノーマル") {
 				speakers << U"{}（{}）"_fmt(spk.name, st.name);
 				speakerIDs << st.id;
 			}
@@ -46,11 +56,14 @@ void Main()
 	const FilePath singQuery = U"Query/SingQuery.json";
 	const URL queryURL = U"http://localhost:50021/sing_frame_audio_query?speaker=6000";
 
-	//--------------------------------------------------  
+	for (double i = 0; i > 1.0; i += 0.1) {
+
+		song_title.draw(Arg::center = Scene::Center(), ColorF{ 1.0, 0.5 });
+	}
+
 	while (System::Update())
 	{
 		background.draw(Arg::center = Scene::Center());
-
 		// vvproj 選択  
 		if (SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 }))
 		{
@@ -104,7 +117,7 @@ void Main()
 				const String sel = speakers[speakerUI[i].selectedItemIndex.value()];
 				FilePath tex = U"Texture/Character/" + sel + U".png";
 				if (!FileSystem::Exists(tex))
-					tex = U"Texture/Character/ずんだもん（ノーマル）.png";
+					tex = U"Texture/Character/ずんだもん（ノーマル）.png";	// デフォルトのイラスト
 				characterTex[i] = Texture{ tex };
 			}
 		}
@@ -138,19 +151,41 @@ void Main()
 				}
 
 			}
-			audio_inst = Audio{ U"Inst/"+ base +U".mp3" };
-			Console << U"🎵「" + base + U"」の再生準備が完了しました。	";
+			audio_inst = Audio{ U"Inst/" + base + U".mp3" };
+			Console << U"「" + base + U"」の再生準備が完了しました。	";
 		}
 
 		// -------------- 再生 ---------------------  
 		const bool playable = std::any_of(audios.begin(), audios.begin() + charCount,
 										  [](const Audio& a) {return !a.isEmpty(); });
 
+
+		// ▶️再生ボタン
 		if (SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 }, unspecified, playable)) {
+			waitingToPlay = true;
+			waitTimer = 0.0;
+		}
+
+		if (waitingToPlay) {
+			waitTimer += Scene::DeltaTime();
 			const String base = FileSystem::BaseName(*vvprojPath);
-			audio_inst.play();
-			audio_inst.setVolume(0.6);
-			for (size_t i = 0; i < charCount; ++i) if (!audios[i].isEmpty()) audios[i].play();
+
+			double alpha = 0.0;
+			if (waitTimer < 2.0) alpha = waitTimer / 2.0;
+			else if (waitTimer < 4.0) alpha = 1.0;
+			else if (waitTimer < 6.0) alpha = (6.0 - waitTimer) / 2.0;
+
+			song_title.draw(Arg::center = Scene::Center(), ColorF{ 1.0, alpha });
+			font(base).drawAt(45, Scene::Center().x,483, ColorF{ 1.0, alpha });
+
+			if (waitTimer >= 6.0) {
+				waitingToPlay = false;
+
+				audio_inst.play();
+				audio_inst.setVolume(0.6);
+				for (size_t i = 0; i < charCount; ++i)
+					if (!audios[i].isEmpty()) audios[i].play();
+			}
 		}
 	}
 }

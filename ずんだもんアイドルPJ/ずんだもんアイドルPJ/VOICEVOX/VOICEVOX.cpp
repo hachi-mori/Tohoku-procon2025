@@ -1,5 +1,4 @@
-﻿// SynthesizeFromJSONFile.cpp
-# include "../stdafx.h"
+﻿# include "../stdafx.h"
 
 namespace VOICEVOX
 {
@@ -244,26 +243,6 @@ namespace VOICEVOX
 		}
 
 		Console(U"ファイルが保存されました: " + savePath);
-		return true;
-	}
-
-	// ScoreQuery→SingQuery
-	// SingQuery→音声ファイル
-	// 2段階を行うラッパー関数
-	[[nodiscard]]
-	bool SynthesizeFromJSONFileWrapper(const FilePath& inputPath, const FilePath& intermediatePath, const FilePath& outputPath, const URL& queryURL, const URL& synthesisURL)
-	{
-		if (!VOICEVOX::SynthesizeFromJSONFile(inputPath, intermediatePath, queryURL)) {
-			Console(U"SingQuery の作成に失敗しました。");
-			return false;
-		}
-
-		if (!VOICEVOX::SynthesizeFromJSONFile(intermediatePath, outputPath, synthesisURL)) {
-			Console(U"音声合成に失敗しました。");
-			return false;
-		}
-
-		Console(U"音声合成が成功しました。");
 		return true;
 	}
 
