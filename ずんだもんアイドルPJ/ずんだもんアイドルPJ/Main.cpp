@@ -32,19 +32,19 @@ void Main()
 	Array<Audio> audios(kMaxCharacters);
 
 	// スピーカー GUI  
-	Array<String> speakers;
-	Array<int32> speakerIDs;
-	for (const auto& spk : VOICEVOX::GetSpeakers())
+	Array<String> Singers;
+	Array<int32> SingerIDs;
+	for (const auto& spk : VOICEVOX::GetSingers())
 		for (const auto& st : spk.styles)
 		{
-//			if (spk.name == U"ずんだもん" && st.name != U"ささやき") {
+//			if (spk.name == U"ずんだもん") {
 			if (st.name == U"ノーマル") {
-				speakers << U"{}（{}）"_fmt(spk.name, st.name);
-				speakerIDs << st.id;
+				Singers << U"{}（{}）"_fmt(spk.name, st.name);
+				SingerIDs << st.id;
 			}
 		}
 
-	Array<ListBoxState> speakerUI(kMaxCharacters, ListBoxState{ speakers });
+	Array<ListBoxState> SingerUI(kMaxCharacters, ListBoxState{ Singers });
 	Array<Optional<uint64>> prevSel(kMaxCharacters);
 
 	// レイアウト  
@@ -54,7 +54,7 @@ void Main()
 	// 共通パス  
 	Optional<FilePath> vvprojPath;
 	const FilePath singQuery = U"Query/SingQuery.json";
-	const URL queryURL = U"http://localhost:50021/sing_frame_audio_query?speaker=6000";
+	const URL queryURL = U"http://localhost:50021/sing_frame_audio_query?Singer=6000";
 
 	for (double i = 0; i > 1.0; i += 0.1) {
 
@@ -108,13 +108,13 @@ void Main()
 			}
 			characterTex[i].scaled(scale).drawAt(centers[i], ColorF(1.0, alpha));
 
-			SimpleGUI::ListBox(speakerUI[i], centers[i] + kListOff, 300, 220);
+			SimpleGUI::ListBox(SingerUI[i], centers[i] + kListOff, 300, 220);
 
 			// 選択変更時に立ち絵切替
-			if (speakerUI[i].selectedItemIndex != prevSel[i])
+			if (SingerUI[i].selectedItemIndex != prevSel[i])
 			{
-				prevSel[i] = speakerUI[i].selectedItemIndex;
-				const String sel = speakers[speakerUI[i].selectedItemIndex.value()];
+				prevSel[i] = SingerUI[i].selectedItemIndex;
+				const String sel = Singers[SingerUI[i].selectedItemIndex.value()];
 				FilePath tex = U"Texture/Character/" + sel + U".png";
 				if (!FileSystem::Exists(tex))
 					tex = U"Texture/Character/ずんだもん（ノーマル）.png";	// デフォルトのイラスト
@@ -134,14 +134,14 @@ void Main()
 				if (!VOICEVOX::ConvertVVProjToScoreJSON(*vvprojPath, score, i))
 					continue;
 
-				// speaker ID  
-				const uint64 sel = speakerUI[i].selectedItemIndex.value_or(0);
-				const int32 spkID = speakerIDs[sel] + 3000;
+				// Singer ID  
+				const uint64 sel = SingerUI[i].selectedItemIndex.value_or(0);
+				const int32 spkID = SingerIDs[sel] + 3000;
 
 				const URL synthURL =
-					U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);
+					U"http://localhost:50021/frame_synthesis?Singer={}"_fmt(spkID);
 
-				FilePath wav = U"Voice/" + base + U"-" + speakers[sel]
+				FilePath wav = U"Voice/" + base + U"-" + Singers[sel]
 					+ U"_track" + Format(i + 1) + U".wav";
 
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(

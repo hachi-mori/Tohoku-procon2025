@@ -3,7 +3,7 @@
 
 namespace VOICEVOX
 {
-	struct Speaker {
+	struct Singer {
 		String name;
 		struct Style {
 			String name;
@@ -12,7 +12,7 @@ namespace VOICEVOX
 		Array<Style> styles;
 	};
 
-	Array<Speaker> GetSpeakers(Duration timeout = SecondsF{ 5.0 });
+	Array<Singer> GetSingers(Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj のトラック数を返す
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath);

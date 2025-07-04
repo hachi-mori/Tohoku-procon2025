@@ -43,11 +43,11 @@ namespace VOICEVOX
 	} // unnamed-namespace
 
 	// -----------------------------------------------------------------------------
-	// 2. HTTP: Speaker 一覧
+	// 2. HTTP: Singer 一覧
 	// -----------------------------------------------------------------------------
-	Array<Speaker> GetSpeakers(const Duration timeout)
+	Array<Singer> GetSingers(const Duration timeout)
 	{
-		constexpr URLView url = U"http://localhost:50021/speakers";
+		constexpr URLView url = U"http://localhost:50021/singers";
 
 		AsyncHTTPTask task = SimpleHTTP::GetAsync(url, {});
 		Stopwatch     sw{ StartImmediately::Yes };
@@ -65,15 +65,15 @@ namespace VOICEVOX
 			return{};
 
 		const JSON json = task.getAsJSON();
-		Array<Speaker> out;
+		Array<Singer> out;
 
 		for (auto&& [_, sp] : json)
 		{
-			Speaker s;  s.name = sp[U"name"].get<String>();
+			Singer s;  s.name = sp[U"name"].get<String>();
 
 			for (auto&& [__, st] : sp[U"styles"])
 			{
-				Speaker::Style tmp;
+				Singer::Style tmp;
 				tmp.name = st[U"name"].get<String>();
 				tmp.id = st[U"id"].get<int32>();
 				s.styles << tmp;
