@@ -12,6 +12,8 @@ namespace VOICEVOX
 		Array<Style> styles;
 	};
 
+	int32 GetKeyAdjustment(const String& singer, const String& style);
+
 	Array<Singer> GetSingers(Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj のトラック数を返す
