@@ -14,6 +14,14 @@ namespace VOICEVOX
 
 	int32 GetKeyAdjustment(const String& singer, const String& style);
 
+	bool TransposeScoreJSON(const FilePath& inPath,
+						const FilePath& outPath,
+						int semitone);
+	/// SingQuery.json を半音単位で移調
+	bool TransposeSingQueryJSON(const FilePath& inPath,
+								const FilePath& outPath,
+								int semitone);
+
 	Array<Singer> GetSingers(Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj のトラック数を返す
@@ -32,6 +40,7 @@ namespace VOICEVOX
 		const FilePath& outputPath,
 		const URL& queryURL,
 		const URL& synthesisURL,
-		size_t maxFrames
+		size_t maxFrames,
+		int keyShift
 	);
 }

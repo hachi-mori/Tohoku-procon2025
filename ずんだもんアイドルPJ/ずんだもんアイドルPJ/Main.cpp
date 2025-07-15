@@ -95,7 +95,10 @@ void Main()
 		for (size_t i = 0; i < charCount; ++i)
 			centers << Vec2{ step * (i + 1), kCenterY };
 
+
 		// キャラ描画 + ListBox
+		Array<size_t> singingIdx;           // 歌っている i を集める
+		size_t singingNow = 0; // フレームごとに初期化
 		for (size_t i = 0; i < charCount; ++i)
 		{
 			// 音量によってスケールと透明度を決定
@@ -110,8 +113,10 @@ void Main()
 				double energy = std::accumulate(fft.buffer.begin(), fft.buffer.end(), 0.0);
 				energy /= fft.buffer.size();
 
-				if (energy > 0.00001)
+				if (energy > 0.00005)
 				{
+					++singingNow;
+					singingIdx << i;
 					scale = 0.55;
 					alpha = 1.0;
 				}
@@ -125,11 +130,32 @@ void Main()
 			{
 				prevSel[i] = SingerUI[i].selectedItemIndex;
 				const String selLabel = SingerLabels[SingerUI[i].selectedItemIndex.value()];
-				FilePath tex = U"Texture/Character/" + selLabel + U".png";
-				if (!FileSystem::Exists(tex))
-					tex = U"Texture/Character/ずんだもん（ノーマル）.png"; // デフォルト
+				// フォルダ内のファイル一覧を取得
+				const FilePath charFolder = U"Texture/Character/";
+				const auto files = FileSystem::DirectoryContents(charFolder, Recursive::No);
+				Optional<FilePath> matchedTex;
+				for (const auto& f : files)
+				{
+					const String fileName = FileSystem::BaseName(f); // 拡張子なし
+					if (selLabel.starts_with(fileName))
+					{
+						matchedTex = f;
+						break;
+					}
+				}
+				FilePath tex = matchedTex.value_or(charFolder + U"ずんだもん（ノーマル）.png");
 				characterTex[i] = Texture{ tex };
 			}
+
+			// ─── 音量の表示 ───
+			double volume = audios[i].getVolume();
+			font(U"Vol: {:.2f}"_fmt(volume))
+				.drawAt(centers[i] + Vec2{ 0, 150 }, ColorF(1.0)); 
+
+			// ─── パンの表示 ─── ★追加ここから
+			double pan = audios[i].getPan();                        // -1.0 〜 1.0
+			font(U"Pan: {:+.2f}"_fmt(pan))                          // + を付けて左右が分かるように
+				.drawAt(centers[i] + Vec2{ 0, 110 }, ColorF(1.0)); // Vol の 40px 下に描画
 		}
 
 		// ─────────── 音声合成 ───────────
@@ -151,12 +177,14 @@ void Main()
 				const int32 spkID = SingerIDs[selIdx];
 
 				const URL synthURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);
-				Console << spkID;
+
 				FilePath wav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
 					+ U"_track" + Format(i + 1) + U".wav";
 
+				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
+
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-					score, singQuery, wav, queryURL, synthURL, 2500))
+					score, singQuery, wav, queryURL, synthURL, 2500, keyShift))
 				{
 					audios[i] = Audio{ wav };
 				}
@@ -174,9 +202,8 @@ void Main()
 
 		// ─────────── 再生 ───────────
 		const bool playable = std::any_of(audios.begin(), audios.begin() + charCount,
-			[](const Audio& a) {return !a.isEmpty(); });
+			[](const Audio& a) { return !a.isEmpty(); });
 
-		// ▶️再生ボタン
 		if (SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 }, unspecified, playable))
 		{
 			waitingToPlay = true;
@@ -200,10 +227,75 @@ void Main()
 			{
 				waitingToPlay = false;
 
-				audio_inst.play();
-				audio_inst.setVolume(0.6);
+				/* ─ 同時に歌う人数を数える ─ */
+				size_t singers = 0;
 				for (size_t i = 0; i < charCount; ++i)
-					if (!audios[i].isEmpty()) audios[i].play();
+					if (!audios[i].isEmpty())
+						++singers;
+
+				/* 伴奏と各キャラを再生 */
+				audio_inst.play();
+				audio_inst.setVolume(0.4);            // 伴奏の固定ゲイン
+
+				for (size_t i = 0; i < charCount; ++i)
+				{
+					if (!audios[i].isEmpty())
+					{
+						audios[i].play();
+					}
+				}
+			}
+		}
+
+		// ─────────── 音量調整 ───────────
+		// 同時に再生する人数に応じた音量係数を返す
+		auto calcSingerVolume = [](size_t n)
+			{
+				switch (n)
+				{
+				case 0:  return 1.0;  // 0人
+				case 1:  return 1.0;  // 1人
+				case 2:  return 0.7;  // 2人（例）
+				case 3:  return 0.65;  // 3人
+				default: return 0.6;  // 4人以上は控えめに
+				}
+			};
+
+		// 人数に応じた音量・パンに変更
+		if (audio_inst.isPlaying())
+		{
+			/* ─ 音量調整 ─ */
+			const double singerVol = calcSingerVolume(singingNow);
+			for (size_t i = 0; i < charCount; ++i)
+			{
+				if (!audios[i].isEmpty())     // 再生有無にかかわらず設定可
+					audios[i].setVolume(singerVol);
+			}
+
+			/* ─ パン振り分け ─ */
+			static const Array<Array<double>> panTable = {
+				{}, { 0.0 },
+				{ -0.4,  0.4 },
+				{ -0.4,  0.0,  0.4 },
+				{ -0.8, -0.4,  0.4,  0.8 },
+				{ -0.8, -0.4,  0.0,  0.4,  0.8 }
+			};
+
+			const size_t n = singingIdx.size();
+			const Array<double>& pans = panTable[Min(n, static_cast<size_t>(5))];
+
+			/* ① 歌っている人 には定位置パン */
+			for (size_t j = 0; j < n; ++j)
+			{
+				const size_t idx = singingIdx[j];
+				audios[idx].setPan(pans[j]);              // 例: -0.3, +0.3
+			}
+
+			/* ② 歌っていない人 は中央に戻す */
+			for (size_t i = 0; i < charCount; ++i)
+			{
+				if (!singingIdx.contains(i))              // 休符中
+					audios[i].setPan(0.0);                // 中央
 			}
 		}
 	}

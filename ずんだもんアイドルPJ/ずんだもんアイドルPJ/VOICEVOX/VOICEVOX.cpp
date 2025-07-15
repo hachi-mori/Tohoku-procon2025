@@ -89,6 +89,73 @@ namespace VOICEVOX
 		return 0;
 	}
 
+	// 2) 半音移調ユーティリティ
+	// ScoreQuery.json を ±semitone だけ移調する
+	bool TransposeScoreJSON(const FilePath& inPath,
+							const FilePath& outPath,
+							int semitone)
+	{
+		JSON score = JSON::Load(inPath);
+		if (!score || !score.contains(U"notes") || !score[U"notes"].isArray())
+			return false;
+
+		const size_t noteCount = score[U"notes"].size();
+
+		for (size_t i = 0; i < noteCount; ++i)
+		{
+			JSON n = score[U"notes"][i];                 // 値で取得（コピー）
+
+			if (auto midiOpt = n[U"key"].getOpt<int32>())
+			{
+				int32 midi = Clamp<int32>(*midiOpt + semitone, 0, 127);
+				n[U"key"] = midi;
+				n[U"notelen"] = MidiToName(midi);
+			}
+			score[U"notes"][i] = n;                      // 書き戻し
+		}
+		return score.save(outPath);
+	}
+
+	/// SingQuery.json を ±semitone だけ移調して元キーに戻す
+	bool TransposeSingQueryJSON(const FilePath& inPath,
+								const FilePath& outPath,
+								int semitone)
+	{
+		JSON q = JSON::Load(inPath);
+		if (!q) return false;
+
+		const double ratio = std::pow(2.0, semitone / 12.0);
+
+		/* --- f0 カーブ --- */
+		if (q.contains(U"f0") && q[U"f0"].isArray())
+		{
+			const size_t f0Count = q[U"f0"].size();
+			for (size_t i = 0; i < f0Count; ++i)
+			{
+				if (auto d = q[U"f0"][i].getOpt<double>())
+				{
+					q[U"f0"][i] = (*d) * ratio;         // 直接上書き
+				}
+			}
+		}
+
+		/* --- phonemes.note_id --- */
+		if (q.contains(U"phonemes") && q[U"phonemes"].isArray())
+		{
+			const size_t phCount = q[U"phonemes"].size();
+			for (size_t i = 0; i < phCount; ++i)
+			{
+				JSON p = q[U"phonemes"][i];             // コピー
+				if (auto nOpt = p[U"note_id"].getOpt<int32>())
+				{
+					p[U"note_id"] = *nOpt + semitone;
+				}
+				q[U"phonemes"][i] = p;                  // 書き戻し
+			}
+		}
+		return q.save(outPath);
+	}
+
 	// HTTP: Singer 一覧
 	Array<Singer> GetSingers(const Duration timeout)
 	{
@@ -293,47 +360,61 @@ namespace VOICEVOX
 	// 分割ラッパー（maxFramesはデフォルト5000、必要なら上書き可）
 	[[nodiscard]]
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-	const FilePath& inputPath,
-	const FilePath& intermediatePath,
-	const FilePath& outputPath,
-	const URL& queryURL,
-	const URL& synthesisURL,
-	size_t maxFrames)
+		const FilePath& inputPath,          // ScoreQuery.json
+		const FilePath& intermediatePath,   // 使わないが互換のため残す
+		const FilePath& outputPath,         // 出力 WAV
+		const URL& queryURL,           // /sing_frame_audio_query
+		const URL& synthesisURL,       // /frame_synthesis
+		size_t          maxFrames /* = 5000 */,
+		int             keyShift  /* = 0 */)
 	{
-		// JSON読込
+		//──────────────────── ① Score を移調（+方向 = -keyShift） ────────────────────
+		if (keyShift != 0)
+		{
+			// 例: keyShift = -3 → Score を +3 半音上げる
+			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -keyShift))
+			{
+				Console(U"Score 移調に失敗しました");
+				return false;
+			}
+		}
+
+		//──────────────────── ② Score JSON 読込 & notes 分割 ────────────────────────
 		JSON score = JSON::Load(inputPath);
-		if (!score) {
-			Console(U"Score JSONの読み込み失敗");
+		if (!score)
+		{
+			Console(U"Score JSON の読み込み失敗");
 			return false;
 		}
 
-		// notes配列取得
 		const auto& notes = score[U"notes"];
-		if (!notes.isArray()) {
-			Console(U"notesが配列じゃない");
+		if (!notes.isArray())
+		{
+			Console(U"notes が配列ではありません");
 			return false;
 		}
 
-		// 分割
 		Array<JSON> segments;
 		Array<JSON> currentSegment;
 		size_t frameSum = 0;
 		Optional<JSON> carriedOverRest;
 
-		for (const auto& note : notes.arrayView()) {
+		for (const auto& note : notes.arrayView())
+		{
 			currentSegment << note;
 			frameSum += note[U"frame_length"].get<size_t>();
-			bool isRest = (note[U"notelen"].getString() == U"R");
+			const bool isRest = (note[U"notelen"].getString() == U"R");
 
-			if (frameSum >= maxFrames && isRest) {
-				// この休符のframe数を取得
+			if (frameSum >= maxFrames && isRest)
+			{
+				// ─ 休符を 2 分割してセグメント境界にする ─
 				const size_t restFrame = note[U"frame_length"].get<size_t>();
 				const size_t half1 = restFrame / 2;
 				const size_t half2 = restFrame - half1;
 
-				// 直前のセグメントの末尾に half1 を入れる
-				if (!currentSegment.isEmpty()) {
-					currentSegment.pop_back(); // この休符は一旦除去
+				if (!currentSegment.isEmpty())
+				{
+					currentSegment.pop_back(); // 元休符を除去
 
 					JSON rest1;
 					rest1[U"frame_length"] = half1;
@@ -343,7 +424,6 @@ namespace VOICEVOX
 					currentSegment << rest1;
 				}
 
-				// 休符の後半は次のセグメントの先頭に持ち越し
 				JSON rest2;
 				rest2[U"frame_length"] = half2;
 				rest2[U"key"] = JSON();
@@ -351,81 +431,86 @@ namespace VOICEVOX
 				rest2[U"notelen"] = U"R";
 				carriedOverRest = rest2;
 
-				// セグメントとして保存
 				JSON segJson;
 				segJson[U"notes"] = currentSegment;
 				segments << segJson;
 
-				// 初期化
+				// リセット
 				currentSegment.clear();
 				frameSum = 0;
 
-				// 後半休符を次セグメントに挿入
 				currentSegment << *carriedOverRest;
 			}
 		}
 
-		// 残りを追加
-		if (!currentSegment.isEmpty()) {
+		if (!currentSegment.isEmpty())
+		{
 			JSON segJson;
 			segJson[U"notes"] = currentSegment;
 			segments << segJson;
 		}
 
-		// 各セグメントで合成
+		//──────────────────── ③ 各セグメントで合成 ───────────────────────────────
 		Array<FilePath> tempWavs;
-		for (size_t i = 0; i < segments.size(); ++i) {
-			// 一時jsonファイル
-			FilePath tmpScore = U"tmp/tmp_score_" + Format(i) + U".json";
-			FilePath tmpQuery = U"tmp/tmp_query_" + Format(i) + U".json";
-			FilePath tmpWav = U"tmp/tmp_part_" + Format(i) + U".wav";
+		for (size_t i = 0; i < segments.size(); ++i)
+		{
+			// 一時ファイル群
+			const FilePath tmpScore = U"tmp/tmp_score_" + Format(i) + U".json";
+			const FilePath tmpQuery = U"tmp/tmp_query_" + Format(i) + U".json";
+			const FilePath tmpWav = U"tmp/tmp_part_" + Format(i) + U".wav";
 			segments[i].save(tmpScore);
 
-			// ScoreQuery -> SingQuery
-			if (!VOICEVOX::SynthesizeFromJSONFile(tmpScore, tmpQuery, queryURL)) {
-				Console(U"SingQuery作成失敗(分割" + Format(i) + U")");
+			// ScoreQuery → SingQuery
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpScore, tmpQuery, queryURL))
+			{
+				Console(U"SingQuery 作成失敗 (分割 " + Format(i) + U")");
 				return false;
 			}
 
-			// SingQuery を作った直後に JSON を読み込んで修正
-			JSON query = JSON::Load(tmpQuery);
-			if (query) {
-				query[U"volumeScale"] = 1.0;              // 音量スケール（0.0〜1.0推奨）
-				query[U"outputSamplingRate"] = 44100;     // 出力レート
-				query[U"outputStereo"] = true;            // ステレオ出力ON
-				query.save(tmpQuery);                     // 上書き保存
-			}
-			else {
-				Console << U"SingQuery JSON の読み込みに失敗しました";
+			//──────────────── ④ SingQuery を -keyShift 半音戻す ────────────────
+			if (keyShift != 0 &&
+				!VOICEVOX::TransposeSingQueryJSON(tmpQuery, tmpQuery, keyShift))
+			{
+				Console(U"SingQuery 移調に失敗しました");
 				return false;
 			}
 
-			// SingQuery -> WAV
-			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, synthesisURL)) {
-				Console(U"音声合成失敗(分割" + Format(i) + U")");
+			// 音量などのメタ調整
+			if (JSON query = JSON::Load(tmpQuery))
+			{
+				query[U"volumeScale"] = 1.0;
+				query[U"outputSamplingRate"] = 44100;
+				query[U"outputStereo"] = true;
+				query.save(tmpQuery);
+			}
+
+			// SingQuery → WAV
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, synthesisURL))
+			{
+				Console(U"音声合成失敗 (分割 " + Format(i) + U")");
 				return false;
 			}
 			tempWavs << tmpWav;
-			Wave part{ tmpWav };
-			//Console << part.sampleRate(); // 各WAVのサンプリングレート
 		}
 
-		// 分割WAV連結
+		//──────────────────── ⑤ 分割 WAV を連結 ──────────────────────────────
 		Wave joined;
-		for (const auto& wav : tempWavs) {
+		for (const auto& wav : tempWavs)
+		{
 			Wave part{ wav };
 			joined.append(part);
 		}
 		joined.save(outputPath);
 
-		// 一時ファイル削除
-		for (size_t i = 0; i < segments.size(); ++i) {
-			FileSystem::Remove(U"tmp_score_" + Format(i) + U".json");
-			FileSystem::Remove(U"tmp_query_" + Format(i) + U".json");
-			FileSystem::Remove(U"tmp_part_" + Format(i) + U".wav");
+		//──────────────────── ⑥ 一時ファイルを掃除 ────────────────────────────
+		for (size_t i = 0; i < segments.size(); ++i)
+		{
+			FileSystem::Remove(U"tmp/tmp_score_" + Format(i) + U".json");
+			FileSystem::Remove(U"tmp/tmp_query_" + Format(i) + U".json");
+			FileSystem::Remove(U"tmp/tmp_part_" + Format(i) + U".wav");
 		}
 
-		Console(U"分割合成＆連結が完了：" + outputPath);
+		Console(U"分割合成＆連結が完了: " + outputPath);
 		return true;
 	}
 }
