@@ -28,7 +28,7 @@ void Main()
 
 	// キャラ用コンテナ（最大数で確保）
 	Array<Texture> characterTex(kMaxCharacters,
-		Texture{ U"Texture/Character/ずんだもん（ノーマル）.png" });
+		Texture{ U"Texture/Character/VOICEVOX/ずんだもん.png" });
 	Array<Audio> audios(kMaxCharacters);
 
 	// ─────────────────────────────
@@ -102,7 +102,7 @@ void Main()
 		for (size_t i = 0; i < charCount; ++i)
 		{
 			// 音量によってスケールと透明度を決定
-			double scale = 0.5;
+			double scale = 0.8;
 			double alpha = 0.5;
 			if (audios[i].isPlaying())
 			{
@@ -117,7 +117,7 @@ void Main()
 				{
 					++singingNow;
 					singingIdx << i;
-					scale = 0.55;
+					scale = 0.9;
 					alpha = 1.0;
 				}
 			}
@@ -131,7 +131,7 @@ void Main()
 				prevSel[i] = SingerUI[i].selectedItemIndex;
 				const String selLabel = SingerLabels[SingerUI[i].selectedItemIndex.value()];
 				// フォルダ内のファイル一覧を取得
-				const FilePath charFolder = U"Texture/Character/";
+				const FilePath charFolder = U"Texture/Character/VOICEVOX/";
 				const auto files = FileSystem::DirectoryContents(charFolder, Recursive::No);
 				Optional<FilePath> matchedTex;
 				for (const auto& f : files)
@@ -143,7 +143,7 @@ void Main()
 						break;
 					}
 				}
-				FilePath tex = matchedTex.value_or(charFolder + U"ずんだもん（ノーマル）.png");
+				FilePath tex = matchedTex.value_or(charFolder + U"ずんだもん.png");
 				characterTex[i] = Texture{ tex };
 			}
 
