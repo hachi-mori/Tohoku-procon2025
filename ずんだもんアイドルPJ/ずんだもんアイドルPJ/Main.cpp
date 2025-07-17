@@ -40,17 +40,16 @@ void Main()
 	Array<int32>  SingerIDs;      // VOICEVOX スタイル ID
 
 	for (const auto& spk : VOICEVOX::GetSingers())
-		for (const auto& st : spk.styles)
+	{
+		if (!spk.styles.isEmpty())
 		{
-			// 表示対象を絞り込む条件（例: ノーマルのみ）
-			if (st.name == U"ノーマル")
-			{
-				SingerLabels << U"{}（{}）"_fmt(spk.name, st.name);
-				SingerNames << spk.name;
-				StyleNames << st.name;
-				SingerIDs << st.id;
-			}
+			const auto& st = spk.styles[0]; // 先頭のスタイルだけ使用
+			SingerLabels << U"{}（{}）"_fmt(spk.name, st.name);
+			SingerNames << spk.name;
+			StyleNames << st.name;
+			SingerIDs << st.id;
 		}
+	}
 
 	// ListBox 状態（キャラ数ぶん）
 	Array<ListBoxState> SingerUI(kMaxCharacters, ListBoxState{ SingerLabels });
@@ -184,7 +183,7 @@ void Main()
 				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
 
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-					score, singQuery, wav, queryURL, synthURL, 2500, keyShift))
+					score, singQuery, wav, queryURL, synthURL, 2500, keyShift))	// 分割調整量は
 				{
 					audios[i] = Audio{ wav };
 				}

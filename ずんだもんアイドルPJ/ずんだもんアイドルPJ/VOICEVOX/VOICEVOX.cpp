@@ -357,7 +357,7 @@ namespace VOICEVOX
 		return true;
 	}
 
-	// 分割ラッパー（maxFramesはデフォルト5000、必要なら上書き可）
+	// 分割ラッパー
 	[[nodiscard]]
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,          // ScoreQuery.json
@@ -365,9 +365,29 @@ namespace VOICEVOX
 		const FilePath& outputPath,         // 出力 WAV
 		const URL& queryURL,           // /sing_frame_audio_query
 		const URL& synthesisURL,       // /frame_synthesis
-		size_t          maxFrames /* = 5000 */,
+		size_t          maxFrames /* = 2500 */,
 		int             keyShift  /* = 0 */)
 	{
+		//──────────────────── ⓪ 条件付きで、Score をオク下にする ────────────────────
+		if (keyShift < -12) // 基準値以下はオク下
+		{
+			const int octave = 12;
+			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -octave)) // -12でオク下になる
+			{
+				Console(U"Score 移調に失敗しました");
+				return false;
+			}
+		}
+		if (keyShift < -20) // 基準値以下はさらにオク下
+		{
+			const int octave = 12;
+			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -octave)) // -12でオク下になる
+			{
+				Console(U"Score 移調に失敗しました");
+				return false;
+			}
+		}
+
 		//──────────────────── ① Score を移調（+方向 = -keyShift） ────────────────────
 		if (keyShift != 0)
 		{
