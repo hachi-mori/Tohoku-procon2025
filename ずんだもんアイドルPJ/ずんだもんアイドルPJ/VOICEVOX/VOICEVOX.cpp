@@ -74,8 +74,9 @@ namespace VOICEVOX
 		{ U"琴詠ニア",      {{U"ノーマル",-4}} },
 	};
 
-	// グローバル関数として提供
-	int32 GetKeyAdjustment(const String& singer, const String& style)
+
+	int32 GetKeyAdjustment(const String& singer,
+							const String& style)
 	{
 		auto itSinger = kKeyAdjustmentTable.find(singer);
 		if (itSinger != kKeyAdjustmentTable.end()) {
@@ -89,8 +90,7 @@ namespace VOICEVOX
 		return 0;
 	}
 
-	// 2) 半音移調ユーティリティ
-	// ScoreQuery.json を ±semitone だけ移調する
+	
 	bool TransposeScoreJSON(const FilePath& inPath,
 							const FilePath& outPath,
 							int semitone)
@@ -116,7 +116,7 @@ namespace VOICEVOX
 		return score.save(outPath);
 	}
 
-	/// SingQuery.json を ±semitone だけ移調して元キーに戻す
+	
 	bool TransposeSingQueryJSON(const FilePath& inPath,
 								const FilePath& outPath,
 								int semitone)
@@ -156,7 +156,7 @@ namespace VOICEVOX
 		return q.save(outPath);
 	}
 
-	// HTTP: Singer 一覧
+	
 	Array<Singer> GetSingers(const Duration timeout)
 	{
 		constexpr URLView url = U"http://localhost:50021/singers";
@@ -195,7 +195,7 @@ namespace VOICEVOX
 		return out;
 	}
 
-	// vvproj ヘルパ
+	
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath)
 	{
 		const JSON src = JSON::Load(vvprojPath);
@@ -210,7 +210,7 @@ namespace VOICEVOX
 		return song[U"tracks"].size();
 	}
 
-	// vvproj → Score JSON（指定トラックだけ）
+	
 	bool ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
 								  const FilePath& outJsonPath,
 								  size_t trackIndex)
@@ -298,9 +298,11 @@ namespace VOICEVOX
 		return true;
 	}
 
-	// JSON ファイルから音声合成を行う
 	[[nodiscard]]
-	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath, const FilePath& savePath, const URL& synthesisURL, const Duration timeout)
+	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath,
+								const FilePath& savePath,
+								const URL& synthesisURL,
+								const Duration timeout)
 	{
 		// JSON ファイルを読み込む
 		const JSON query = JSON::Load(jsonFilePath);
@@ -356,8 +358,7 @@ namespace VOICEVOX
 		Console(U"ファイルが保存されました: " + savePath);
 		return true;
 	}
-
-	// 分割ラッパー
+	
 	[[nodiscard]]
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,          // ScoreQuery.json
@@ -365,13 +366,13 @@ namespace VOICEVOX
 		const FilePath& outputPath,         // 出力 WAV
 		const URL& queryURL,           // /sing_frame_audio_query
 		const URL& synthesisURL,       // /frame_synthesis
-		size_t          maxFrames /* = 2500 */,
-		int             keyShift  /* = 0 */)
+		size_t          maxFrames,
+		int             keyShift)
 	{
 		//──────────────────── ⓪ 条件付きで、Score をオク下にする ────────────────────
+		const int octave = 12;
 		if (keyShift < -12) // 基準値以下はオク下
-		{
-			const int octave = 12;
+		{	
 			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -octave)) // -12でオク下になる
 			{
 				Console(U"Score 移調に失敗しました");
@@ -380,7 +381,6 @@ namespace VOICEVOX
 		}
 		if (keyShift < -20) // 基準値以下はさらにオク下
 		{
-			const int octave = 12;
 			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -octave)) // -12でオク下になる
 			{
 				Console(U"Score 移調に失敗しました");
