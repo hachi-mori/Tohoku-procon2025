@@ -165,7 +165,7 @@ void Main()
 			for (size_t i = 0; i < charCount; ++i)
 			{
 				// vvproj → Score JSON
-				FilePath score = U"Score/" + base + U"_track" + Format(i + 1) + U".json";
+				FilePath score = U"tmp" + base + U"_track" + Format(i + 1) + U".json";
 				if (!VOICEVOX::ConvertVVProjToScoreJSON(*vvprojPath, score, i))
 					continue;
 
