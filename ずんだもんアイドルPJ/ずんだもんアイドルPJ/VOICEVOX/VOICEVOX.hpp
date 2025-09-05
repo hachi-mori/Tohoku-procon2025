@@ -33,7 +33,7 @@ namespace VOICEVOX
 	// vvproj のトラック数を取得する（trackOrder があればそのサイズ）
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath);
 
-	// vvproj の指定トラックを Score JSON に変換して保存する（frame_length 付き）
+	// vvproj(song) の指定トラックを Score JSON に変換して保存する（frame_length 付き）
 	[[nodiscard]]
 	bool ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
 								  const FilePath& outJsonPath,
@@ -44,7 +44,7 @@ namespace VOICEVOX
 	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath,
 								const FilePath& savePath,
 								const URL& synthesisURL,
-								const Duration timeout = SecondsF{ 5.0 });
+								const Duration timeout = SecondsF{ 15.0 });
 
 	// 分割合成ラッパー：ScoreQuery → 分割 SingQuery → WAV 合成 → 連結（keyShift に応じて移調）
 	[[nodiscard]]
@@ -57,4 +57,13 @@ namespace VOICEVOX
 		size_t maxFrames = 2500,
 		int keyShift = 0
 	);
+
+	JSON CreateQuery(const String text, const int32 speakerID,
+		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
+		const Duration timeout = SecondsF{ 15.0 });
+
+	// vvproj(talk) を Talk Query JSON に変換して保存する
+	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
+									  const FilePath& outJsonPath,
+									  const int32 speakerID);
 }

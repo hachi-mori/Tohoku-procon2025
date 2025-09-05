@@ -335,7 +335,7 @@ namespace VOICEVOX
 					FileSystem::Remove(savePath);
 				}
 
-				Console(U"リクエストがタイムアウトしました。");
+				Console(U"リクエストがタイムアウトしました: " + savePath);
 				return false;
 			}
 
@@ -351,7 +351,7 @@ namespace VOICEVOX
 				FileSystem::Remove(savePath);
 			}
 
-			Console(U"リクエストが失敗しました。");
+			Console(U"リクエストが失敗しました: " + savePath);
 			return false;
 		}
 
@@ -532,5 +532,91 @@ namespace VOICEVOX
 
 		Console(U"分割合成＆連結が完了: " + outputPath);
 		return true;
+	}
+
+	[[nodiscard]]
+	JSON CreateQuery(const String text, const int32 speakerID,
+		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
+		const Duration timeout)
+	{
+		const URL url = U"http://localhost:50021/audio_query?text={}&speaker={}"_fmt(PercentEncode(text), speakerID);
+		const std::string data = JSON{}.formatUTF8Minimum();
+		AsyncHTTPTask task = SimpleHTTP::PostAsync(url, {}, data.data(), data.size());
+		Stopwatch stopwatch{ StartImmediately::Yes };
+
+		while (not task.isReady())
+		{
+			if (timeout <= stopwatch)
+			{
+				task.cancel();
+				return JSON::Invalid();
+			}
+
+			System::Sleep(1ms);
+		}
+
+		if (not task.getResponse().isOK())
+		{
+			return JSON::Invalid();
+		}
+
+		JSON query = task.getAsJSON();
+		query[U"intonationScale"] = intonationScale;
+		query[U"speedScale"] = speedScale;
+		query[U"volumeScale"] = volumeScale;
+		query[U"pitchScale"] = pitchScale;
+
+		return query;
+	}
+
+	[[nodiscard]]
+	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
+									  const FilePath& outJsonPath,
+									  const int32 speakerID)
+	{
+		// ① vvproj（JSON）を読み込む
+		const JSON src = JSON::Load(vvprojPath);
+		if (!src || !src.contains(U"talk"))
+		{
+			return false;
+		}
+
+		// ② talk セクションを参照し、audioKeys の先頭キーを取得
+		const JSON& talk = src[U"talk"];
+		if (!talk.contains(U"audioKeys") || !talk[U"audioKeys"].isArray())
+		{
+			return false;
+		}
+		const auto keys = talk[U"audioKeys"].arrayView();
+		if (keys.begin() == keys.end())
+		{
+			return false; // 空配列
+		}
+		const String key = (*keys.begin()).getString();
+
+		// ③ 該当 audioItem から text を取り出す
+		if (!talk.contains(U"audioItems") || !talk[U"audioItems"][key].isObject())
+		{
+			return false;
+		}
+		const String text = talk[U"audioItems"][key][U"text"].getOr<String>(U"");
+
+		// ④ /audio_query に投げてベースクエリを取得
+		JSON query = CreateQuery(
+			text, speakerID,
+			/*intonationScale*/ 1.0,
+			/*speedScale*/      1.0,
+			/*volumeScale*/     1.0,
+			/*pitchScale*/      0.0,
+			SecondsF{ 5.0 });
+
+
+		if (!query)
+		{
+			return false;
+		}
+
+		// ⑤ 取得したクエリを保存
+		return query.save(outJsonPath);
 	}
 }

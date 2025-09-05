@@ -29,7 +29,8 @@ void Main()
 	// キャラ用コンテナ（最大数で確保）
 	Array<Texture> characterTex(kMaxCharacters,
 		Texture{ U"Texture/Character/VOICEVOX/ずんだもん.png" });
-	Array<Audio> audios(kMaxCharacters);
+	Array<Audio> songAudio(kMaxCharacters);
+	Array<Audio> talkAudio(kMaxCharacters);
 
 	// ─────────────────────────────
 	//  スピーカー関連のデータ配列
@@ -70,6 +71,19 @@ void Main()
 		song_title.draw(Arg::center = Scene::Center(), ColorF{ 1.0, 0.5 });
 	}
 
+	// 
+	auto analyzeEnergy = [](const Audio& a) -> double
+		{
+			if (!a.isPlaying()) return 0.0;
+			FFTResult fft;
+			FFT::Analyze(fft, a);
+			if (fft.buffer.empty()) return 0.0;
+			double energy = std::accumulate(fft.buffer.begin(), fft.buffer.end(), 0.0);
+			energy /= fft.buffer.size();
+			return energy;
+		};
+	const double kSingingThreshold = 0.00005;
+
 	// ─────────────────────────────
 	//  メインループ
 	// ─────────────────────────────
@@ -100,26 +114,22 @@ void Main()
 		size_t singingNow = 0; // フレームごとに初期化
 		for (size_t i = 0; i < charCount; ++i)
 		{
-			// 音量によってスケールと透明度を決定
+			// 旧: songAudio[i] だけで判定 → 新: song/talk の最大値で OR 判定
 			double scale = 0.8;
 			double alpha = 0.5;
-			if (audios[i].isPlaying())
+
+			const double eSong = analyzeEnergy(songAudio[i]);
+			const double eTalk = analyzeEnergy(talkAudio[i]);
+			const double eMax = Max(eSong, eTalk);          // ★UIは OR 条件（最大値）
+
+			if (eMax > kSingingThreshold)
 			{
-				FFTResult fft;
-				FFT::Analyze(fft, audios[i]);
-
-				// 全帯域のエネルギー平均
-				double energy = std::accumulate(fft.buffer.begin(), fft.buffer.end(), 0.0);
-				energy /= fft.buffer.size();
-
-				if (energy > 0.00005)
-				{
-					++singingNow;
-					singingIdx << i;
-					scale = 0.9;
-					alpha = 1.0;
-				}
+				++singingNow;
+				singingIdx << i;
+				scale = 0.9;
+				alpha = 1.0;
 			}
+
 			characterTex[i].scaled(scale).drawAt(centers[i], ColorF(1.0, alpha));
 
 			SimpleGUI::ListBox(SingerUI[i], centers[i] + kListOff, 300, 220);
@@ -147,12 +157,12 @@ void Main()
 			}
 
 			// ─── 音量の表示 ───
-			double volume = audios[i].getVolume();
+			double volume = songAudio[i].getVolume();
 			font(U"Vol: {:.2f}"_fmt(volume))
 				.drawAt(centers[i] + Vec2{ 0, 150 }, ColorF(1.0)); 
 
 			// ─── パンの表示 ─── ★追加ここから
-			double pan = audios[i].getPan();                        // -1.0 〜 1.0
+			double pan = songAudio[i].getPan();                        // -1.0 〜 1.0
 			font(U"Pan: {:+.2f}"_fmt(pan))                          // + を付けて左右が分かるように
 				.drawAt(centers[i] + Vec2{ 0, 110 }, ColorF(1.0)); // Vol の 40px 下に描画
 		}
@@ -164,35 +174,48 @@ void Main()
 
 			for (size_t i = 0; i < charCount; ++i)
 			{
-				// vvproj → Score JSON
-				FilePath score = U"tmp" + base + U"_track" + Format(i + 1) + U".json";
+				// ★ ListBox 選択→speakerID は最初に決める
+				const uint64 selIdx = SingerUI[i].selectedItemIndex.value_or(0);
+				const int32  spkID = SingerIDs[selIdx];
+				const int32  talkSpkID = spkID - 3000;
+
+				const URL songsynthURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);
+				const URL talksynthURL = U"http://localhost:50021/synthesis?speaker={}"_fmt(talkSpkID);
+
+				FilePath songwav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
+					+ U"_track" + Format(i + 1) + U".wav";
+				FilePath talkwav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
+					+ U"_talk_track" + Format(i + 1) + U".wav";
+
+				// vvproj → Song Score JSON
+				FilePath score = U"tmp/tmp_" + base + U"_track" + Format(i + 1) + U".json"; // ← ついでに "tmp_" に統一
 				if (!VOICEVOX::ConvertVVProjToScoreJSON(*vvprojPath, score, i))
 					continue;
 
-				// ListBox 選択
-				const uint64 selIdx = SingerUI[i].selectedItemIndex.value_or(0);
+				// ★ vvproj(talk) → Talk Query JSON（失敗しても歌は続行）
+				FilePath talkIn = U"Score/talk/" + base + U"_track" + Format(i + 1) + U".vvproj";
+				FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
+				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(talkIn, talkOut, talkSpkID);
 
-				// スタイル ID
-				const int32 spkID = SingerIDs[selIdx];
-
-				const URL synthURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);
-
-				FilePath wav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
-					+ U"_track" + Format(i + 1) + U".wav";
-
+				// ── 歌（分割あり）は必ず実行
 				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
-
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-					score, singQuery, wav, queryURL, synthURL, 2500, keyShift))	// 分割調整量は
+					score, singQuery, songwav, queryURL, songsynthURL, 2500, keyShift))
 				{
-					audios[i] = Audio{ wav };
+					songAudio[i] = Audio{ songwav };
+					FileSystem::Remove(score); // 一時Score掃除
 				}
 
-				// デバッグ：キー補正値表示
-				const String& singerName = SingerNames[selIdx];
-				const String& styleName = StyleNames[selIdx];
-				Console << U"{}（{}） → Shift:{}"_fmt(singerName, styleName,
-					VOICEVOX::GetKeyAdjustment(singerName, styleName));
+				// ── Talk は生成できたときだけ合成し、成功時に掃除
+				if (talkOk && VOICEVOX::SynthesizeFromJSONFile(talkOut, talkwav, talksynthURL))
+				{
+					FileSystem::Remove(talkOut);
+					talkAudio[i] = Audio{ talkwav };
+				}
+
+				// デバッグ：キー補正値
+				Console << U"{}（{}） → Shift:{}"_fmt(SingerNames[selIdx], StyleNames[selIdx],
+							VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]));
 			}
 
 			audio_inst = Audio{ U"Inst/" + base + U".mp3" };
@@ -200,7 +223,7 @@ void Main()
 		}
 
 		// ─────────── 再生 ───────────
-		const bool playable = std::any_of(audios.begin(), audios.begin() + charCount,
+		const bool playable = std::any_of(songAudio.begin(), songAudio.begin() + charCount,
 			[](const Audio& a) { return !a.isEmpty(); });
 
 		if (SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 }, unspecified, playable))
@@ -229,7 +252,7 @@ void Main()
 				/* ─ 同時に歌う人数を数える ─ */
 				size_t singers = 0;
 				for (size_t i = 0; i < charCount; ++i)
-					if (!audios[i].isEmpty())
+					if (!songAudio[i].isEmpty())
 						++singers;
 
 				/* 伴奏と各キャラを再生 */
@@ -238,9 +261,10 @@ void Main()
 
 				for (size_t i = 0; i < charCount; ++i)
 				{
-					if (!audios[i].isEmpty())
+					if (!songAudio[i].isEmpty())
 					{
-						audios[i].play();
+						if (!songAudio[i].isEmpty()) songAudio[i].play();
+						if (!talkAudio[i].isEmpty()) talkAudio[i].play();
 					}
 				}
 			}
@@ -267,8 +291,8 @@ void Main()
 			const double singerVol = calcSingerVolume(singingNow);
 			for (size_t i = 0; i < charCount; ++i)
 			{
-				if (!audios[i].isEmpty())     // 再生有無にかかわらず設定可
-					audios[i].setVolume(singerVol);
+				if (!songAudio[i].isEmpty()) songAudio[i].setVolume(singerVol);
+				if (!talkAudio[i].isEmpty()) talkAudio[i].setVolume(singerVol);
 			}
 
 			/* ─ パン振り分け ─ */
@@ -287,15 +311,18 @@ void Main()
 			for (size_t j = 0; j < n; ++j)
 			{
 				const size_t idx = singingIdx[j];
-				audios[idx].setPan(pans[j]);              // 例: -0.3, +0.3
+				if (!songAudio[idx].isEmpty()) songAudio[idx].setPan(pans[j]);
+				if (!talkAudio[idx].isEmpty()) talkAudio[idx].setPan(pans[j]);              // 例: -0.3, +0.3
 			}
 
 			/* ② 歌っていない人 は中央に戻す */
-			for (size_t i = 0; i < charCount; ++i)
-			{
-				if (!singingIdx.contains(i))              // 休符中
-					audios[i].setPan(0.0);                // 中央
+			for (size_t i = 0; i < charCount; ++i) {
+				if (!singingIdx.contains(i)) {
+					if (!songAudio[i].isEmpty()) songAudio[i].setPan(0.0);
+					if (!talkAudio[i].isEmpty()) talkAudio[i].setPan(0.0);
+				}
 			}
+
 		}
 	}
 }
