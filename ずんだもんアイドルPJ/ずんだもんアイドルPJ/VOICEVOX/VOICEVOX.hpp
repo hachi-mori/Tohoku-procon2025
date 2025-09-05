@@ -65,5 +65,5 @@ namespace VOICEVOX
 	// vvproj(talk) を Talk Query JSON に変換して保存する
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
-									  const int32 speakerID);
+									  const int32 speakerID, double* outTalkStartSec);
 }

@@ -572,7 +572,7 @@ namespace VOICEVOX
 	[[nodiscard]]
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
-									  const int32 speakerID)
+									  const int32 speakerID, double* outTalkStartSec)
 	{
 		// ① vvproj（JSON）を読み込む
 		const JSON src = JSON::Load(vvprojPath);
@@ -580,6 +580,55 @@ namespace VOICEVOX
 		{
 			return false;
 		}
+
+		// --- 追加: song から talk 開始秒を算出 ---
+		double talkStartSecLocal = 0.0;
+
+		if (src.contains(U"song") && src[U"song"].isObject())
+		{
+			const JSON& song = src[U"song"];
+
+			// tpqn
+			const double tpqn = song[U"tpqn"].isNumber()
+				? song[U"tpqn"].get<double>() : 480.0;
+
+			// bpm（VOICEVOX.cpp のユーティリティを流用）
+			const double bpm = VOICEVOX::GetFirstBPM(song);  // 先頭テンポを使用 :contentReference[oaicite:1]{index=1}
+
+			// 全トラックから最初のノート position（最小値）を探す
+			Optional<int64> earliestTick;
+
+			if (song.contains(U"tracks") && song[U"tracks"].isObject())
+			{
+				for (auto&& [__, track] : song[U"tracks"])
+				{
+					if (!track[U"notes"].isArray()) continue;
+
+					for (auto&& n : track[U"notes"].arrayView())
+					{
+						if (!n[U"position"].isNumber()) continue;
+						const int64 pos = n[U"position"].get<int64>();
+
+						if (!earliestTick || pos < *earliestTick)
+							earliestTick = pos;
+					}
+				}
+			}
+
+			// ticks -> 秒（beats = ticks/tpqn, seconds = beats*(60/BPM)）
+			if (earliestTick)
+			{
+				const double beats = static_cast<double>(*earliestTick) / tpqn;
+				talkStartSecLocal = beats * (60.0 / bpm);
+			}
+			else
+			{
+				talkStartSecLocal = 0.0; // ノートが無い場合は 0 秒
+			}
+		}
+
+		// 呼び出し元へ返す（nullptrなら何もしない）
+		if (outTalkStartSec) *outTalkStartSec = talkStartSecLocal;
 
 		// ② talk セクションを参照し、audioKeys の先頭キーを取得
 		const JSON& talk = src[U"talk"];
@@ -599,7 +648,8 @@ namespace VOICEVOX
 		{
 			return false;
 		}
-		const String text = talk[U"audioItems"][key][U"text"].getOr<String>(U"");
+		const JSON& item = talk[U"audioItems"][key];
+		const String text = item[U"text"].getOr<String>(U"");
 
 		// ④ /audio_query に投げてベースクエリを取得
 		JSON query = CreateQuery(
@@ -616,7 +666,95 @@ namespace VOICEVOX
 			return false;
 		}
 
-		// ⑤ 取得したクエリを保存
+		// ⑤’ vvproj 内の talk.query.accentPhrases[].moras[].{vowelLength,consonantLength}
+		//     をベースクエリの accent_phrases[].moras[].{vowel_length,consonant_length} に反映
+		do
+		{
+			// vvproj 側の query が無い・形式不一致なら何もせず保存へ（安全にスキップ）
+			if (!item.contains(U"query") || !item[U"query"].isObject())
+				break;
+
+			const JSON& srcQuery = item[U"query"];
+			if (!srcQuery.contains(U"accentPhrases") || !srcQuery[U"accentPhrases"].isArray())
+				break;
+
+			// ベースクエリ側もチェック
+			if (!query.contains(U"accent_phrases") || !query[U"accent_phrases"].isArray())
+				break;
+
+			const size_t apCount = Min(srcQuery[U"accentPhrases"].size(),
+									   query[U"accent_phrases"].size());
+
+			for (size_t i = 0; i < apCount; ++i)
+			{
+				const JSON& srcAP = srcQuery[U"accentPhrases"][i];
+				JSON        dstAP = query[U"accent_phrases"][i]; // コピー（あとで書き戻す）
+
+				if (!srcAP.contains(U"moras") || !srcAP[U"moras"].isArray())
+					continue;
+
+				if (!dstAP.contains(U"moras") || !dstAP[U"moras"].isArray())
+					continue;
+
+				const size_t moraCount = Min(srcAP[U"moras"].size(), dstAP[U"moras"].size());
+
+				for (size_t j = 0; j < moraCount; ++j)
+				{
+					const JSON& srcMora = srcAP[U"moras"][j];
+					JSON        dstMora = dstAP[U"moras"][j]; // コピー
+
+					// vowelLength -> vowel_length
+					if (auto vlen = srcMora[U"vowelLength"].getOpt<double>())
+					{
+						dstMora[U"vowel_length"] = *vlen;
+					}
+					// consonantLength -> consonant_length（存在する場合のみ）
+					if (auto clen = srcMora[U"consonantLength"].getOpt<double>())
+					{
+						dstMora[U"consonant_length"] = *clen;
+					}
+
+					// 1モーラ書き戻し
+					dstAP[U"moras"][j] = dstMora;
+				}
+
+				/* --- 読点（pause）を反映 --- */
+				if (srcAP.contains(U"pauseMora") && srcAP[U"pauseMora"].isObject())
+				{
+					const JSON& sp = srcAP[U"pauseMora"];
+
+					JSON dp; // dst pause_mora
+					// JSON null を入れたいフィールドは JSON{} ではなく JSON() を代入
+					dp[U"consonant"] = JSON();  // null
+					dp[U"consonant_length"] = JSON();  // null
+
+					// テキストは vvproj の値を優先（無ければ "、"）
+					dp[U"text"] = sp[U"text"].getOr<String>(U"、");
+
+					// 母音は pau 固定（vvproj 側の値があればそれを尊重）
+					dp[U"vowel"] = sp[U"vowel"].getOr<String>(U"pau");
+
+					// 長さは camelCase → snake_case へ（無ければ 0）
+					dp[U"vowel_length"] = sp[U"vowelLength"].getOr<double>(0.0);
+
+					// ピッチは 0 を基本（vvproj 側に数値があればそれ）
+					dp[U"pitch"] = sp[U"pitch"].getOr<double>(0.0);
+
+					// 書き戻し（無条件で上書き）
+					dstAP[U"pause_mora"] = dp;
+				}
+				else
+				{
+					// 読点無し：null を明示して統一
+					dstAP[U"pause_mora"] = JSON(); // null
+				}
+
+				// 1フレーズ書き戻し
+				query[U"accent_phrases"][i] = dstAP;
+			}
+		} while (false);
+
+		// ⑥ 取得したクエリを保存
 		return query.save(outJsonPath);
 	}
 }

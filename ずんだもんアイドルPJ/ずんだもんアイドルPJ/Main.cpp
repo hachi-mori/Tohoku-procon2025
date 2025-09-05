@@ -31,6 +31,9 @@ void Main()
 		Texture{ U"Texture/Character/VOICEVOX/ずんだもん.png" });
 	Array<Audio> songAudio(kMaxCharacters);
 	Array<Audio> talkAudio(kMaxCharacters);
+	Array<double> talkStartSecs(kMaxCharacters, 0.0);  // 各トラックの開始秒
+	Array<bool>   talkPending(kMaxCharacters, false);  // 再生待ちフラグ
+	double playElapsedSec = 0.0;                       // 再生開始からの経過秒
 
 	// ─────────────────────────────
 	//  スピーカー関連のデータ配列
@@ -195,7 +198,9 @@ void Main()
 				// ★ vvproj(talk) → Talk Query JSON（失敗しても歌は続行）
 				FilePath talkIn = U"Score/talk/" + base + U"_track" + Format(i + 1) + U".vvproj";
 				FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
-				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(talkIn, talkOut, talkSpkID);
+				double talkStartSec = 0.0;
+				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(talkIn, talkOut, talkSpkID, &talkStartSec);
+				talkStartSecs[i] = Max(0.0, talkStartSec-0.155); // 念のため 0 以上にクランプ 0.155は微調整
 
 				// ── 歌（分割あり）は必ず実行
 				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
@@ -209,7 +214,7 @@ void Main()
 				// ── Talk は生成できたときだけ合成し、成功時に掃除
 				if (talkOk && VOICEVOX::SynthesizeFromJSONFile(talkOut, talkwav, talksynthURL))
 				{
-					FileSystem::Remove(talkOut);
+					//FileSystem::Remove(talkOut);
 					talkAudio[i] = Audio{ talkwav };
 				}
 
@@ -263,8 +268,10 @@ void Main()
 				{
 					if (!songAudio[i].isEmpty())
 					{
-						if (!songAudio[i].isEmpty()) songAudio[i].play();
-						if (!talkAudio[i].isEmpty()) talkAudio[i].play();
+						if (!songAudio[i].isEmpty()) songAudio[i].play();              // 歌はすぐ再生
+
+						// トークは「待ち」にする（音声があるトラックのみ）
+						talkPending[i] = (!talkAudio[i].isEmpty());
 					}
 				}
 			}
@@ -287,6 +294,17 @@ void Main()
 		// 人数に応じた音量・パンに変更
 		if (audio_inst.isPlaying())
 		{
+			playElapsedSec += Scene::DeltaTime();
+
+			for (size_t i = 0; i < charCount; ++i)
+			{
+				if (talkPending[i] && (playElapsedSec >= talkStartSecs[i]))
+				{
+					talkAudio[i].play();   // ここで初めて再生
+					talkPending[i] = false;
+				}
+			}
+
 			/* ─ 音量調整 ─ */
 			const double singerVol = calcSingerVolume(singingNow);
 			for (size_t i = 0; i < charCount; ++i)
