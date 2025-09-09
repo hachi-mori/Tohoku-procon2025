@@ -44,7 +44,7 @@ namespace VOICEVOX
 	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath,
 								const FilePath& savePath,
 								const URL& synthesisURL,
-								const Duration timeout = SecondsF{ 15.0 });
+								const Duration timeout = SecondsF{ 60.0 });
 
 	// 分割合成ラッパー：ScoreQuery → 分割 SingQuery → WAV 合成 → 連結（keyShift に応じて移調）
 	[[nodiscard]]
@@ -58,12 +58,31 @@ namespace VOICEVOX
 		int keyShift = 0
 	);
 
+	[[nodiscard]]
+	bool SynthesizeFromVVProjWrapperSplitTalk(
+		const FilePath& vvprojPath,
+		const FilePath& outputPrefix,
+		int32           speakerID,
+		size_t          talkTrackIndex,
+		size_t          maxFrames,
+		const URL& synthesisURL);   // ★ String ではなく URL
+
+	[[nodiscard]]
+	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
+		const FilePath& vvprojPath,
+		const FilePath& outputPrefix,
+		const FilePath& joinedOutPath,
+		int32           speakerID,
+		size_t          talkTrackIndex,
+		size_t          maxFrames,
+		const URL& synthesisURL);   // ★ 統一
+
 	JSON CreateQuery(const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
-		const Duration timeout = SecondsF{ 15.0 });
+		const Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj(talk) を Talk Query JSON に変換して保存する
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
-									  const int32 speakerID, double* outTalkStartSec);
+									  const int32 speakerID, double* outTalkStartSecm, size_t talkTrackIndex);
 }

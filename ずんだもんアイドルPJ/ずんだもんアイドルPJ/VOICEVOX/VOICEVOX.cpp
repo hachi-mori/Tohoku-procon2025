@@ -90,7 +90,7 @@ namespace VOICEVOX
 		return 0;
 	}
 
-	
+
 	bool TransposeScoreJSON(const FilePath& inPath,
 							const FilePath& outPath,
 							int semitone)
@@ -116,7 +116,7 @@ namespace VOICEVOX
 		return score.save(outPath);
 	}
 
-	
+
 	bool TransposeSingQueryJSON(const FilePath& inPath,
 								const FilePath& outPath,
 								int semitone)
@@ -156,7 +156,7 @@ namespace VOICEVOX
 		return q.save(outPath);
 	}
 
-	
+
 	Array<Singer> GetSingers(const Duration timeout)
 	{
 		constexpr URLView url = U"http://localhost:50021/singers";
@@ -195,7 +195,7 @@ namespace VOICEVOX
 		return out;
 	}
 
-	
+
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath)
 	{
 		const JSON src = JSON::Load(vvprojPath);
@@ -210,7 +210,7 @@ namespace VOICEVOX
 		return song[U"tracks"].size();
 	}
 
-	
+
 	bool ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
 								  const FilePath& outJsonPath,
 								  size_t trackIndex)
@@ -358,7 +358,7 @@ namespace VOICEVOX
 		Console(U"ファイルが保存されました: " + savePath);
 		return true;
 	}
-	
+
 	[[nodiscard]]
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,          // ScoreQuery.json
@@ -372,7 +372,7 @@ namespace VOICEVOX
 		//──────────────────── ⓪ 条件付きで、Score をオク下にする ────────────────────
 		const int octave = 12;
 		if (keyShift < -12) // 基準値以下はオク下
-		{	
+		{
 			if (!VOICEVOX::TransposeScoreJSON(inputPath, inputPath, -octave)) // -12でオク下になる
 			{
 				Console(U"Score 移調に失敗しました");
@@ -534,6 +534,203 @@ namespace VOICEVOX
 		return true;
 	}
 
+	namespace {
+		// 共通：index 指定で 1 トラック取得（trackOrder 優先）
+		static bool SelectTrackByIndex(const JSON& song, size_t index, JSON& outTrack)
+		{
+			if (!song || !song[U"tracks"].isObject()) return false;
+
+			if (song[U"trackOrder"].isArray() && index < song[U"trackOrder"].size())
+			{
+				const String key = song[U"trackOrder"][index].getString();
+				if (song[U"tracks"][key].isObject())
+				{
+					outTrack = song[U"tracks"][key];
+					return true;
+				}
+			}
+			// fallback: trackOrder が無い or index 超過時は tracks を列挙
+			size_t cur = 0;
+			for (auto&& [__, tr] : song[U"tracks"])
+			{
+				if (cur == index) { outTrack = tr; return true; }
+				++cur;
+			}
+			return false;
+		}
+	}
+
+	[[nodiscard]]
+	bool SynthesizeFromVVProjWrapperSplitTalk(
+		const FilePath& vvprojPath,
+		const FilePath& outputPrefix,
+		int32           speakerID,
+		size_t          talkTrackIndex,
+		size_t          maxFrames,
+		const URL& synthesisURL)
+	{
+		// 互換用：分割ファイルも作りつつ、連結版も出しておく
+		const FilePath joined = outputPrefix + U"_joined.wav";
+
+		return SynthesizeFromVVProjWrapperSplitTalkJoin(
+			vvprojPath,
+			outputPrefix,
+			joined,
+			speakerID,
+			talkTrackIndex,
+			maxFrames,
+			synthesisURL);
+	}
+
+	[[nodiscard]]
+	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
+		const FilePath& vvprojPath,    // 入力 .vvproj
+		const FilePath& outputPrefix,  // 分割WAV出力: prefix_0.wav, prefix_1.wav, ...
+		const FilePath& joinedOutPath, // 連結WAV出力
+		const int32     speakerID,     // talk Speaker ID
+		const size_t    talkTrackIndex,// 参照トラック index
+		const size_t    maxFrames,     // 1セグメント最大フレーム数（93.75fps換算）
+		const URL& synthesisURL   // /synthesis?speaker=...
+	)
+	{
+		FileSystem::CreateDirectories(U"tmp");
+
+		// 1) vvproj 読み込み
+		const JSON src = JSON::Load(vvprojPath);
+		if (!src || !src.contains(U"song") || !src[U"song"].isObject()) return false;
+		const JSON& song = src[U"song"];
+		if (!song.contains(U"tracks") || !song[U"tracks"].isObject()) return false;
+
+		// 2) 対象トラック抽出（trackOrder 優先）
+		JSON track;
+		if (!SelectTrackByIndex(song, talkTrackIndex, track) || !track[U"notes"].isArray()) return false;
+
+		// 3) notes を position 昇順に
+		Array<JSON> notesVec;
+		for (auto&& n : track[U"notes"].arrayView()) notesVec << n;
+		if (notesVec.isEmpty()) return false;
+		std::sort(notesVec.begin(), notesVec.end(),
+			[](const JSON& a, const JSON& b) { return a[U"position"].get<int64>() < b[U"position"].get<int64>(); });
+
+		// 4) 変換器
+		const double tpqn = song[U"tpqn"].isNumber() ? song[U"tpqn"].get<double>() : 480.0;
+		const double bpm = VOICEVOX::GetFirstBPM(song);
+		auto ticksToSec = [&](int64 ticks) { return (static_cast<double>(ticks) / tpqn) * (60.0 / bpm); };
+		auto ticksToFrames = [&](int64 ticks, double& carry) { return static_cast<size_t>(CalcFrameLen(ticks, bpm, tpqn, carry)); };
+
+		// 5) 休符でのみ分割（gapsSec も収集）
+		Array<Array<JSON>> segments;
+		Array<double>      gapsSec;   // segments.size()-1 と一致
+		Array<JSON>        current;
+		size_t             frameSum = 0;
+		double             carry = 0.0;
+
+		{
+			const JSON& n0 = notesVec.front();
+			const int64 dur = n0[U"duration"].get<int64>();
+			current << n0;
+			frameSum += ticksToFrames(dur, carry);
+		}
+		int64 prevEnd = notesVec.front()[U"position"].get<int64>() + notesVec.front()[U"duration"].get<int64>();
+
+		for (size_t i = 1; i < notesVec.size(); ++i)
+		{
+			const JSON& note = notesVec[i];
+			const int64 pos = note[U"position"].get<int64>();
+			const int64 dur = note[U"duration"].get<int64>();
+
+			if (pos > prevEnd)
+			{
+				const int64 gapTick = (pos - prevEnd);
+				const size_t gapFrame = ticksToFrames(gapTick, carry);
+				const double gapSec = ticksToSec(gapTick);
+
+				if (frameSum + gapFrame >= maxFrames)
+				{
+					segments << current;
+					current.clear();
+					frameSum = 0;
+					carry = 0.0;
+					gapsSec << (Max(0.0, gapSec) -0.2585); // この境界の休符秒 0.260は微調整
+				}
+				else
+				{
+					frameSum += gapFrame;
+				}
+			}
+
+			current << note;
+			frameSum += ticksToFrames(dur, carry);
+			prevEnd = Max(prevEnd, pos + dur);
+		}
+		if (!current.isEmpty()) segments << current;
+
+		if (segments.isEmpty() || (gapsSec.size() + 1 != segments.size())) return false;
+
+		// 6) 各セグメント: 一時 vvproj → ConvertVVProjToTalkQueryJSON → /synthesis
+		Array<FilePath> partWavs;
+		for (size_t si = 0; si < segments.size(); ++si)
+		{
+			JSON tmpVVProj = src;
+			JSON tmpTrack = track;
+			tmpTrack[U"notes"] = segments[si];
+
+			static constexpr StringView kSegKey = U"__seg__";
+			tmpVVProj[U"song"][U"tracks"][kSegKey] = tmpTrack;
+			tmpVVProj[U"song"][U"trackOrder"] = Array<String>{ String{kSegKey} };
+
+			const FilePath tmpVvprojPath = U"tmp/tmp_talkseg_" + Format(si) + U".vvproj";
+			if (!tmpVVProj.save(tmpVvprojPath)) continue;
+
+			const FilePath tmpQueryPath = U"tmp/tmp_talkquery_" + Format(si) + U".json";
+			double dummyStart = 0.0;
+			if (!VOICEVOX::ConvertVVProjToTalkQueryJSON(tmpVvprojPath, tmpQueryPath, speakerID, &dummyStart, 0)) continue;
+
+			const FilePath outWav = outputPrefix + U"_" + Format(si) + U".wav";
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQueryPath, outWav, synthesisURL)) continue;
+
+			partWavs << outWav;
+		}
+		if (partWavs.isEmpty()) return false;
+
+		// 7) 無音を挟んで連結（Siv3D: Wave は常にステレオ / ch 指定は不要）
+		auto makeSilence = [](double seconds, uint32 sampleRate)->Wave
+			{
+				const size_t samples = static_cast<size_t>(Max(0.0, seconds) * sampleRate);
+				return Wave{ samples, sampleRate }; // ゼロ初期化のステレオ無音
+			};
+
+		Wave joined;
+		uint32 sr = 44100;
+
+		for (size_t i = 0; i < partWavs.size(); ++i)
+		{
+			Wave part{ partWavs[i] };
+			if (part.isEmpty()) return false;
+
+			if (i == 0)
+			{
+				sr = part.sampleRate();
+				joined = part;              // 1本目をそのまま基準に
+			}
+			else
+			{
+				joined.append(part);        // 2本目以降を連結
+			}
+
+			if (i + 1 < partWavs.size())
+			{
+				const double gap = gapsSec[i];
+				if (gap > 0.0)
+				{
+					joined.append(makeSilence(gap, sr)); // 無音を挟む
+				}
+			}
+		}
+
+		return joined.save(joinedOutPath);
+	}
+
 	[[nodiscard]]
 	JSON CreateQuery(const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
@@ -572,84 +769,111 @@ namespace VOICEVOX
 	[[nodiscard]]
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
-									  const int32 speakerID, double* outTalkStartSec)
+									  const int32 speakerID, double* outTalkStartSec, size_t talkTrackIndex)
 	{
-		// ① vvproj（JSON）を読み込む
+		// ① vvproj ロード & talk 存在チェック
 		const JSON src = JSON::Load(vvprojPath);
-		if (!src || !src.contains(U"talk"))
-		{
-			return false;
-		}
+		if (!src) return false;
 
-		// --- 追加: song から talk 開始秒を算出 ---
+		// --- song から talkStartSec 算出（talk 用に選んだトラックの最初のノート基準）
 		double talkStartSecLocal = 0.0;
+		if (src.contains(U"song") && src[U"song"].isObject())
+		{
+			const JSON& song = src[U"song"];
+			const double tpqn = song[U"tpqn"].isNumber() ? song[U"tpqn"].get<double>() : 480.0;
+			const double bpm = VOICEVOX::GetFirstBPM(song);
+			JSON track;
+			if (SelectTrackByIndex(song, talkTrackIndex, track) && track[U"notes"].isArray())
+			{
+				Optional<int64> earliestTick;
+				for (auto&& n : track[U"notes"].arrayView())
+				{
+					if (!n[U"position"].isNumber()) continue;
+					const int64 pos = n[U"position"].get<int64>();
+					if (!earliestTick || pos < *earliestTick) earliestTick = pos;
+				}
+				if (earliestTick)
+				{
+					const double beats = static_cast<double>(*earliestTick) / tpqn;
+					talkStartSecLocal = beats * (60.0 / bpm);
+				}
+			}
+		}
+		if (outTalkStartSec) *outTalkStartSec = talkStartSecLocal;
+
+		// ③★ 指定された 1 トラックだけから lyric を結合し、ノート間の休符には「、」を挿入
+		String text;
+		int insertedCommas = 0;       // デバッグ用: 追加した読点の数
+		bool appendedLyric = false;    // 少なくとも1つは歌詞を追加できたか
 
 		if (src.contains(U"song") && src[U"song"].isObject())
 		{
 			const JSON& song = src[U"song"];
-
-			// tpqn
-			const double tpqn = song[U"tpqn"].isNumber()
-				? song[U"tpqn"].get<double>() : 480.0;
-
-			// bpm（VOICEVOX.cpp のユーティリティを流用）
-			const double bpm = VOICEVOX::GetFirstBPM(song);  // 先頭テンポを使用 :contentReference[oaicite:1]{index=1}
-
-			// 全トラックから最初のノート position（最小値）を探す
-			Optional<int64> earliestTick;
-
-			if (song.contains(U"tracks") && song[U"tracks"].isObject())
+			JSON track;
+			if (SelectTrackByIndex(song, talkTrackIndex, track) && track[U"notes"].isArray())
 			{
-				for (auto&& [__, track] : song[U"tracks"])
+				// position 昇順に並べ替えたノート列（歌詞が空でも並べる）
+				struct NoteRow { int64 pos; int64 dur; String lyr; bool hasLyric; };
+				Array<NoteRow> rows;
+
+				for (auto&& n : track[U"notes"].arrayView())
 				{
-					if (!track[U"notes"].isArray()) continue;
+					const auto posOpt = n[U"position"].getOpt<int64>();
+					const auto durOpt = n[U"duration"].getOpt<int64>();
+					const auto lyricOpt = n[U"lyric"].getOpt<String>();
+					if (!posOpt || !durOpt) continue;
 
-					for (auto&& n : track[U"notes"].arrayView())
+					NoteRow r;
+					r.pos = *posOpt;
+					r.dur = *durOpt;
+					r.hasLyric = (lyricOpt && !lyricOpt->isEmpty());
+					r.lyr = r.hasLyric ? *lyricOpt : U"";
+					rows << r;
+				}
+
+				if (!rows.empty())
+				{
+					std::sort(rows.begin(), rows.end(),
+							  [](const NoteRow& a, const NoteRow& b) { return a.pos < b.pos; });
+
+					// シーケンスをなめて、ノート間ギャップがあれば「、」を挿入してから次の歌詞を連結
+					int64 prevEnd = rows.front().pos + rows.front().dur;
+
+					// 先頭ノートの歌詞
+					if (rows.front().hasLyric) { text += rows.front().lyr; appendedLyric = true; }
+
+					for (size_t i = 1; i < rows.size(); ++i)
 					{
-						if (!n[U"position"].isNumber()) continue;
-						const int64 pos = n[U"position"].get<int64>();
+						const auto& cur = rows[i];
 
-						if (!earliestTick || pos < *earliestTick)
-							earliestTick = pos;
+						// 休符検出: 現在ノートの開始posが直前ノートの終端より後ろならギャップあり
+						if (cur.pos > prevEnd)
+						{
+							text += U"、";
+							++insertedCommas;
+						}
+
+						// 現在ノートの歌詞（空はスキップ）
+						if (cur.hasLyric) { text += cur.lyr; appendedLyric = true; }
+
+						// 次のための終端更新
+						prevEnd = Max(prevEnd, cur.pos + cur.dur);
 					}
 				}
 			}
-
-			// ticks -> 秒（beats = ticks/tpqn, seconds = beats*(60/BPM)）
-			if (earliestTick)
-			{
-				const double beats = static_cast<double>(*earliestTick) / tpqn;
-				talkStartSecLocal = beats * (60.0 / bpm);
-			}
-			else
-			{
-				talkStartSecLocal = 0.0; // ノートが無い場合は 0 秒
-			}
 		}
 
-		// 呼び出し元へ返す（nullptrなら何もしない）
-		if (outTalkStartSec) *outTalkStartSec = talkStartSecLocal;
-
-		// ② talk セクションを参照し、audioKeys の先頭キーを取得
-		const JSON& talk = src[U"talk"];
-		if (!talk.contains(U"audioKeys") || !talk[U"audioKeys"].isArray())
+		// ★ 歌詞が1つも無かった → 以降処理を行わずスキップ（読点だけのtextは無効）
+		if (!appendedLyric)
 		{
+			const String base = FileSystem::BaseName(vvprojPath);
+			Console << U"[Talk] skip: lyricなし (file={}, trackIndex={}トラック目, insertedComma={})"_fmt(base, talkTrackIndex + 1, insertedCommas);
 			return false;
 		}
-		const auto keys = talk[U"audioKeys"].arrayView();
-		if (keys.begin() == keys.end())
-		{
-			return false; // 空配列
-		}
-		const String key = (*keys.begin()).getString();
 
-		// ③ 該当 audioItem から text を取り出す
-		if (!talk.contains(U"audioItems") || !talk[U"audioItems"][key].isObject())
-		{
-			return false;
-		}
-		const JSON& item = talk[U"audioItems"][key];
-		const String text = item[U"text"].getOr<String>(U"");
+		// 参考: デバッグログ（必要なら）
+		Console << U"[Talk] text完成 (len={}, insertedComma={}, trackIndex={}トラック目)"_fmt(text.size(), insertedCommas, talkTrackIndex + 1);
+
 
 		// ④ /audio_query に投げてベースクエリを取得
 		JSON query = CreateQuery(
@@ -660,99 +884,219 @@ namespace VOICEVOX
 			/*pitchScale*/      0.0,
 			SecondsF{ 5.0 });
 
-
 		if (!query)
 		{
 			return false;
 		}
 
-		// ⑤’ vvproj 内の talk.query.accentPhrases[].moras[].{vowelLength,consonantLength}
-		//     をベースクエリの accent_phrases[].moras[].{vowel_length,consonant_length} に反映
+		// ⑤’ notes（position/duration）から mora 長さ／pause_mora を再計算して、④で作成した query に上書き
 		do
 		{
-			// vvproj 側の query が無い・形式不一致なら何もせず保存へ（安全にスキップ）
-			if (!item.contains(U"query") || !item[U"query"].isObject())
-				break;
+			// 前提チェック
+			if (!src.contains(U"song") || !src[U"song"].isObject()) break;
+			if (!query.contains(U"accent_phrases") || !query[U"accent_phrases"].isArray()) break;
 
-			const JSON& srcQuery = item[U"query"];
-			if (!srcQuery.contains(U"accentPhrases") || !srcQuery[U"accentPhrases"].isArray())
-				break;
+			const JSON& song = src[U"song"];
 
-			// ベースクエリ側もチェック
-			if (!query.contains(U"accent_phrases") || !query[U"accent_phrases"].isArray())
-				break;
+			// ---- talk 用に参照する 1 トラックを特定（trackOrder 優先）----
+			JSON track;
+			bool found = false;
+			if (song[U"trackOrder"].isArray() && (talkTrackIndex < song[U"trackOrder"].size()))
+			{
+				const String key = song[U"trackOrder"][talkTrackIndex].getString();
+				if (song[U"tracks"][key].isObject()) { track = song[U"tracks"][key]; found = true; }
+			}
+			if (!found)
+			{
+				size_t cur = 0;
+				for (auto&& [__, tr] : song[U"tracks"])
+				{
+					if (cur == talkTrackIndex) { track = tr; found = true; break; }
+					++cur;
+				}
+			}
+			if (!found || !track.contains(U"notes") || !track[U"notes"].isArray()) break;
 
-			const size_t apCount = Min(srcQuery[U"accentPhrases"].size(),
-									   query[U"accent_phrases"].size());
+			// ---- tick→秒 （先頭テンポのみ使用。可変テンポ対応が必要ならここを差し替え）----
+			const double tpqn = song[U"tpqn"].isNumber() ? song[U"tpqn"].get<double>() : 480.0;
+			const double bpm = VOICEVOX::GetFirstBPM(song);
+			auto ticksToSec = [&](int64 ticks) -> double
+				{
+					return (static_cast<double>(ticks) / tpqn) * (60.0 / bpm);
+				};
+			auto round6 = [](double x) -> double { return std::round(x * 1'000'000.0) / 1'000'000.0; };
+
+			// ---- query 側：配分対象の mora を列挙（読点「、」は除外）。pause_mora は初期化 ----
+			const size_t apCount = query[U"accent_phrases"].size();
+			Array<std::pair<size_t, size_t>> moraMap; // (apIdx, moraIdx)
+			moraMap.reserve(256);
 
 			for (size_t i = 0; i < apCount; ++i)
 			{
-				const JSON& srcAP = srcQuery[U"accentPhrases"][i];
-				JSON        dstAP = query[U"accent_phrases"][i]; // コピー（あとで書き戻す）
+				JSON ap = query[U"accent_phrases"][i];  // コピー
 
-				if (!srcAP.contains(U"moras") || !srcAP[U"moras"].isArray())
-					continue;
+				// pause_mora はあとで休符から再構成するため一旦クリア
+				ap[U"pause_mora"] = JSON();             // null
+				query[U"accent_phrases"][i] = ap;       // 書き戻し
 
-				if (!dstAP.contains(U"moras") || !dstAP[U"moras"].isArray())
-					continue;
+				if (!ap.contains(U"moras") || !ap[U"moras"].isArray()) continue;
 
-				const size_t moraCount = Min(srcAP[U"moras"].size(), dstAP[U"moras"].size());
-
-				for (size_t j = 0; j < moraCount; ++j)
+				const size_t mCount = ap[U"moras"].size();
+				for (size_t j = 0; j < mCount; ++j)
 				{
-					const JSON& srcMora = srcAP[U"moras"][j];
-					JSON        dstMora = dstAP[U"moras"][j]; // コピー
+					const String t = ap[U"moras"][j][U"text"].getOr<String>(U"");
+					if (t == U"、") continue;            // 読点モーラは配分対象外
+					moraMap << std::make_pair(i, j);
+				}
+			}
 
-					// vowelLength -> vowel_length
-					if (auto vlen = srcMora[U"vowelLength"].getOpt<double>())
+			// ---- 楽譜ノート列（position 昇順）。歌詞の有無は mora 進行に使う ----
+			struct NoteRow { int64 pos; int64 dur; bool hasLyric; };
+			Array<NoteRow> rows;
+
+			for (auto&& n : track[U"notes"].arrayView())
+			{
+				const auto posOpt = n[U"position"].getOpt<int64>();
+				const auto durOpt = n[U"duration"].getOpt<int64>();
+				const bool hasLyric = n[U"lyric"].getOpt<String>().has_value()
+					&& !n[U"lyric"].get<String>().isEmpty();
+				if (!posOpt || !durOpt) continue;
+				rows << NoteRow{ *posOpt, *durOpt, hasLyric };
+			}
+			if (rows.isEmpty()) break;
+
+			std::sort(rows.begin(), rows.end(),
+				[](const NoteRow& a, const NoteRow& b) { return a.pos < b.pos; });
+
+			// ---- モーラへの長さ反映ユーティリティ（子音有無で分岐）----
+			auto applyLengthToMora = [&](JSON& ap, size_t moraIdx, double sec)
+				{
+					JSON mora = ap[U"moras"][moraIdx]; // 値で取得（コピー）
+
+					const bool hasCons =
+						mora.contains(U"consonant") &&
+						!mora[U"consonant"].isNull() &&
+						mora[U"consonant"].isString();
+
+					const double c0 = (hasCons && mora.contains(U"consonant_length") && mora[U"consonant_length"].isNumber())
+						? mora[U"consonant_length"].get<double>() : 0.0;
+					const double v0 = (mora.contains(U"vowel_length") && mora[U"vowel_length"].isNumber())
+						? mora[U"vowel_length"].get<double>() : 0.0;
+					const double sum0 = (c0 + v0);
+
+					if (hasCons)
 					{
-						dstMora[U"vowel_length"] = *vlen;
+						if (sum0 > 0.0)
+						{
+							const double c = round6(sec * (c0 / sum0));
+							const double v = round6(sec - c); // c+v=sec を厳密維持
+							mora[U"consonant_length"] = c;
+							mora[U"vowel_length"] = v;
+						}
+						else
+						{
+							// 既定値が 0:0 の場合は全量を母音へ
+							mora[U"consonant_length"] = 0.0;
+							mora[U"vowel_length"] = round6(sec);
+						}
 					}
-					// consonantLength -> consonant_length（存在する場合のみ）
-					if (auto clen = srcMora[U"consonantLength"].getOpt<double>())
+					else
 					{
-						dstMora[U"consonant_length"] = *clen;
+						// 子音が無いモーラ：consonant_length は null（数値 0.0 ではなく）
+						mora[U"consonant_length"] = JSON();  // null
+						mora[U"vowel_length"] = round6(sec);
 					}
 
-					// 1モーラ書き戻し
-					dstAP[U"moras"][j] = dstMora;
+					ap[U"moras"][moraIdx] = mora; // 書き戻し
+				};
+
+			// ---- ノート秒を mora に、ノート間ギャップ秒を pause_mora に配分 ----
+			Array<double> pauseSec(apCount, 0.0);  // AP ごとの休符秒合計（正確な秒数をそのまま）
+			size_t moraPtr = 0;                    // 次に埋める mora（moraMap のインデックス）
+			Optional<size_t> lastApOfMora;         // 直前に埋めた mora が属する AP
+
+			// 先頭ノートの終端（先頭休符は直前モーラが無いので加算しない）
+			int64 prevEnd = rows.front().pos + rows.front().dur;
+
+			// 先頭ノート：歌詞があれば最初の mora へ
+			if (rows.front().hasLyric && moraPtr < moraMap.size())
+			{
+				const double sec = ticksToSec(rows.front().dur);
+				const size_t apIdx = moraMap[moraPtr].first;
+				const size_t moraIdx = moraMap[moraPtr].second;
+
+				JSON ap = query[U"accent_phrases"][apIdx];   // コピー
+				applyLengthToMora(ap, moraIdx, sec);
+				query[U"accent_phrases"][apIdx] = ap;        // 書き戻し
+
+				lastApOfMora = apIdx;
+				++moraPtr;
+			}
+
+			// 2 ノート目以降
+			for (size_t i = 1; i < rows.size(); ++i)
+			{
+				const auto& cur = rows[i];
+
+				// ノート間ギャップ（休符）→ 直前モーラの属する AP の pause_mora に加算
+				if (cur.pos > prevEnd && lastApOfMora.has_value())
+				{
+					const int64 gap = cur.pos - prevEnd;
+					pauseSec[*lastApOfMora] += ticksToSec(gap);   // 圧縮せず正確な秒数
 				}
 
-				/* --- 読点（pause）を反映 --- */
-				if (srcAP.contains(U"pauseMora") && srcAP[U"pauseMora"].isObject())
+				// 現在ノートの歌詞 → 次の mora に割当
+				if (cur.hasLyric && moraPtr < moraMap.size())
 				{
-					const JSON& sp = srcAP[U"pauseMora"];
+					const double sec = ticksToSec(cur.dur);
+					const size_t apIdx = moraMap[moraPtr].first;
+					const size_t moraIdx = moraMap[moraPtr].second;
 
-					JSON dp; // dst pause_mora
-					// JSON null を入れたいフィールドは JSON{} ではなく JSON() を代入
-					dp[U"consonant"] = JSON();  // null
-					dp[U"consonant_length"] = JSON();  // null
+					JSON ap = query[U"accent_phrases"][apIdx];   // コピー
+					applyLengthToMora(ap, moraIdx, sec);
+					query[U"accent_phrases"][apIdx] = ap;        // 書き戻し
 
-					// テキストは vvproj の値を優先（無ければ "、"）
-					dp[U"text"] = sp[U"text"].getOr<String>(U"、");
+					lastApOfMora = apIdx;
+					++moraPtr;
+				}
 
-					// 母音は pau 固定（vvproj 側の値があればそれを尊重）
-					dp[U"vowel"] = sp[U"vowel"].getOr<String>(U"pau");
+				// 終端更新
+				prevEnd = Max(prevEnd, cur.pos + cur.dur);
+			}
 
-					// 長さは camelCase → snake_case へ（無ければ 0）
-					dp[U"vowel_length"] = sp[U"vowelLength"].getOr<double>(0.0);
+			// ---- pause_mora を書き戻し（0 のときは null のまま）----
+			for (size_t i = 0; i < apCount; ++i)
+			{
+				JSON ap = query[U"accent_phrases"][i];   // コピー
+				const double ps = round6(pauseSec[i]);
 
-					// ピッチは 0 を基本（vvproj 側に数値があればそれ）
-					dp[U"pitch"] = sp[U"pitch"].getOr<double>(0.0);
-
-					// 書き戻し（無条件で上書き）
-					dstAP[U"pause_mora"] = dp;
+				if (ps > 0.0)
+				{
+					JSON pm;
+					pm[U"consonant"] = JSON();     // null
+					pm[U"consonant_length"] = JSON();     // null
+					pm[U"text"] = U"、";
+					pm[U"vowel"] = U"pau";
+					pm[U"vowel_length"] = ps;         // 正確な秒数
+					pm[U"pitch"] = 0.0;
+					ap[U"pause_mora"] = pm;
 				}
 				else
 				{
-					// 読点無し：null を明示して統一
-					dstAP[U"pause_mora"] = JSON(); // null
+					ap[U"pause_mora"] = JSON();           // null
 				}
+				query[U"accent_phrases"][i] = ap;        // 書き戻し
+			}
 
-				// 1フレーズ書き戻し
-				query[U"accent_phrases"][i] = dstAP;
+			// （任意）検証とログ
+			if (moraPtr < moraMap.size())
+			{
+				const String base = FileSystem::BaseName(vvprojPath);
+				Console << U"[Talk⑤] mora割当 未完了: {} / {} (file={}, trackIndex={})"_fmt(
+					moraPtr, moraMap.size(), base, talkTrackIndex);
 			}
 		} while (false);
+
 
 		// ⑥ 取得したクエリを保存
 		return query.save(outJsonPath);

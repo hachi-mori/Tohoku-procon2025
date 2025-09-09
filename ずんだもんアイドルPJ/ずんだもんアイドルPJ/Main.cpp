@@ -100,7 +100,7 @@ void Main()
 			vvprojPath = Dialog::OpenFile({ { U"VOICEVOX Project", { U"vvproj" } } });
 			if (vvprojPath)
 			{
-				charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath), kMaxCharacters);
+				charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath) / 2, kMaxCharacters);
 			}
 		}
 		if (charCount == 0) continue;           // 未選択  
@@ -162,7 +162,7 @@ void Main()
 			// ─── 音量の表示 ───
 			double volume = songAudio[i].getVolume();
 			font(U"Vol: {:.2f}"_fmt(volume))
-				.drawAt(centers[i] + Vec2{ 0, 150 }, ColorF(1.0)); 
+				.drawAt(centers[i] + Vec2{ 0, 150 }, ColorF(1.0));
 
 			// ─── パンの表示 ─── ★追加ここから
 			double pan = songAudio[i].getPan();                        // -1.0 〜 1.0
@@ -196,11 +196,10 @@ void Main()
 					continue;
 
 				// ★ vvproj(talk) → Talk Query JSON（失敗しても歌は続行）
-				FilePath talkIn = U"Score/talk/" + base + U"_track" + Format(i + 1) + U".vvproj";
 				FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
 				double talkStartSec = 0.0;
-				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(talkIn, talkOut, talkSpkID, &talkStartSec);
-				talkStartSecs[i] = Max(0.0, talkStartSec-0.155); // 念のため 0 以上にクランプ 0.155は微調整
+				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(*vvprojPath, talkOut, talkSpkID, &talkStartSec, i + charCount);
+				talkStartSecs[i] = Max(0.0, talkStartSec - 0.155); // 念のため 0 以上にクランプ 0.155は微調整
 
 				// ── 歌（分割あり）は必ず実行
 				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
@@ -212,10 +211,30 @@ void Main()
 				}
 
 				// ── Talk は生成できたときだけ合成し、成功時に掃除
-				if (talkOk && VOICEVOX::SynthesizeFromJSONFile(talkOut, talkwav, talksynthURL))
+				if (talkOk)
 				{
-					//FileSystem::Remove(talkOut);
-					talkAudio[i] = Audio{ talkwav };
+
+					// 出力プレフィックス（分割は prefix_0.wav, 連結は prefix_joined.wav）
+					const FilePath talkPrefix = U"Voice/" + base + U"-" + SingerLabels[selIdx]
+						+ U"_talk_track" + Format(i + 1);
+
+					// 分割合成＋休符無音を挟んで連結（wrapper: joined も一緒に作る）
+					if (VOICEVOX::SynthesizeFromVVProjWrapperSplitTalk(
+						*vvprojPath,      // 入力 vvproj
+						talkPrefix,       // 出力プレフィックス
+						talkSpkID,        // talk speaker ID
+						i + charCount,    // talkTrackIndex（現状の設計どおり）
+						2500*1.5,             // maxFrames（song の1.5倍はいける？）
+						talksynthURL))    // /synthesis
+					{
+						// 連結済みファイルを読む（prefix_joined.wav）
+						const FilePath joinedTalk = talkPrefix + U"_joined.wav";
+						if (FileSystem::Exists(joinedTalk))
+						{
+							talkAudio[i] = Audio{ joinedTalk };
+						}
+					}
+
 				}
 
 				// デバッグ：キー補正値
