@@ -50,7 +50,6 @@ namespace VOICEVOX
 	[[nodiscard]]
 	bool SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,
-		const FilePath& intermediatePath,
 		const FilePath& outputPath,
 		const URL& queryURL,
 		const URL& synthesisURL,
@@ -58,15 +57,7 @@ namespace VOICEVOX
 		int keyShift = 0
 	);
 
-	[[nodiscard]]
-	bool SynthesizeFromVVProjWrapperSplitTalk(
-		const FilePath& vvprojPath,
-		const FilePath& outputPrefix,
-		int32           speakerID,
-		size_t          talkTrackIndex,
-		size_t          maxFrames,
-		const URL& synthesisURL);   // ★ String ではなく URL
-
+	// talk 音声合成の分割合成ラッパー
 	[[nodiscard]]
 	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
 		const FilePath& vvprojPath,
@@ -77,11 +68,13 @@ namespace VOICEVOX
 		size_t          maxFrames,
 		const URL& synthesisURL);   // ★ 統一
 
+	// テキストを VOICEVOX に送信して Talk Query JSON を取得する
 	JSON CreateQuery(const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
 		const Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj(talk) を Talk Query JSON に変換して保存する
+	[[nodiscard]]
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
 									  const int32 speakerID, double* outTalkStartSecm, size_t talkTrackIndex);

@@ -74,7 +74,10 @@ namespace VOICEVOX
 		{ U"琴詠ニア",      {{U"ノーマル",-4}} },
 	};
 
-
+	/// @brief 歌手名+スタイル名から音域調整量を取得します。
+	/// @param singer 歌手名（例: U"ずんだもん"）
+	/// @param style  スタイル名（例: U"ノーマル"）
+	/// @return 音域調整量。見つからない場合は 0 を返します。
 	int32 GetKeyAdjustment(const String& singer,
 							const String& style)
 	{
@@ -90,7 +93,11 @@ namespace VOICEVOX
 		return 0;
 	}
 
-
+	/// @brief song スコア(JSON)の全ノートを半音単位で移調して保存します。
+	/// @param inPath  入力の song スコア JSON ファイルパス
+	/// @param outPath 出力（移調後）の JSON ファイルパス
+	/// @param semitone 移調量（半音）。上げる=正、下げる=負。
+	/// @return 保存に成功した場合 true、失敗した場合 false を返します。
 	bool TransposeScoreJSON(const FilePath& inPath,
 							const FilePath& outPath,
 							int semitone)
@@ -116,7 +123,11 @@ namespace VOICEVOX
 		return score.save(outPath);
 	}
 
-
+	/// @brief song クエリ(JSON)の全ノートを半音単位で移調して保存します。
+	/// @param inPath  入力の song クエリ JSON ファイルパス
+	/// @param outPath 出力（移調後）の JSON ファイルパス
+	/// @param semitone 移調量（半音）。上げる=正、下げる=負。
+	/// @return 保存に成功した場合 true、失敗した場合 false を返します。
 	bool TransposeSingQueryJSON(const FilePath& inPath,
 								const FilePath& outPath,
 								int semitone)
@@ -156,7 +167,9 @@ namespace VOICEVOX
 		return q.save(outPath);
 	}
 
-
+	/// @brief VOICEVOX API /singers から歌手リストを取得します。
+	/// @param timeout タイムアウト時間
+	/// @return Singer の配列。失敗した場合は空配列を返します。
 	Array<Singer> GetSingers(const Duration timeout)
 	{
 		constexpr URLView url = U"http://localhost:50021/singers";
@@ -195,7 +208,9 @@ namespace VOICEVOX
 		return out;
 	}
 
-
+	/// @brief VOICEVOX プロジェクトファイル（.vvproj）からトラック数を取得します。
+	/// @param vvprojPath VOICEVOXプロジェクトファイルのパス
+	/// @return トラック数。取得に失敗した場合は 0 を返します。
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath)
 	{
 		const JSON src = JSON::Load(vvprojPath);
@@ -210,7 +225,11 @@ namespace VOICEVOX
 		return song[U"tracks"].size();
 	}
 
-
+	/// @brief VOICEVOX プロジェクトファイル（.vvproj）から指定トラックを抽出し、song スコア JSON に変換して保存します。
+	/// @param vvprojPath 入力の VOICEVOX プロジェクトファイルのパス
+	/// @param outJsonPath 出力（変換後）の song スコア JSON ファイルのパス
+	/// @param trackIndex 抽出するトラックのインデックス（0～）
+	/// @return 変換に成功した場合 true、失敗した場合 false を返します。
 	bool ConvertVVProjToScoreJSON(const FilePath& vvprojPath,
 								  const FilePath& outJsonPath,
 								  size_t trackIndex)
@@ -298,7 +317,12 @@ namespace VOICEVOX
 		return true;
 	}
 
-	[[nodiscard]]
+	/// @brief VOICEVOX API /frame_synthesis に song クエリ JSON ファイルを POST して歌声合成し、WAV ファイルとして保存します。
+	/// @param jsonFilePath 入力の song クエリ JSON ファイルパス
+	/// @param savePath 出力の WAV ファイルパス
+	/// @param synthesisURL 歌声合成の API エンドポイント URL
+	/// @param timeout タイムアウト時間
+	/// @return 成功した場合 true、失敗した場合 false を返します。
 	bool SynthesizeFromJSONFile(const FilePath& jsonFilePath,
 								const FilePath& savePath,
 								const URL& synthesisURL,
@@ -359,10 +383,16 @@ namespace VOICEVOX
 		return true;
 	}
 
-	[[nodiscard]]
+	/// @brief song 歌声合成の分割合成ラッパー。
+	/// @param inputPath 入力　の song クエリ JSON ファイルパス
+	/// @param outputPath 出力 の WAV ファイルパス
+	/// @param queryURL song 歌声合成 の API エンドポイント URL
+	/// @param synthesisURL 歌声合成の API エンドポイント URL
+	/// @param maxFrames song クエリ分割時の 1 セグメントあたりの最大フレーム数
+	/// @param keyShift 移調量（半音）。上げる=正、下げる=負。
+	/// @return 成功した場合 true、失敗した場合 false を返します。
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,          // ScoreQuery.json
-		const FilePath& intermediatePath,   // 使わないが互換のため残す
 		const FilePath& outputPath,         // 出力 WAV
 		const URL& queryURL,           // /sing_frame_audio_query
 		const URL& synthesisURL,       // /frame_synthesis
@@ -560,38 +590,23 @@ namespace VOICEVOX
 		}
 	}
 
-	[[nodiscard]]
-	bool SynthesizeFromVVProjWrapperSplitTalk(
+	/// @brief talk 音声合成の分割合成ラッパー。
+	/// @param vvprojPath 入力の VOICEVOX プロジェクトファイルパス（.vvproj）
+	/// @param outputPrefix 出力の分割 WAV ファイル接頭辞（prefix_0.wav, ...）
+	/// @param joinedOutPath 出力の連結 WAV ファイルパス
+	/// @param speakerID 使用する talk 話者 ID
+	/// @param talkTrackIndex 対象トラックのインデックス
+	/// @param maxFrames 分割合成時の1セグメントあたりの最大フレーム数（93.75fps換算）
+	/// @param synthesisURL talk 音声合成 API のエンドポイント URL
+	/// @return 成功した場合 true、失敗した場合 false を返します。
+	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
 		const FilePath& vvprojPath,
 		const FilePath& outputPrefix,
-		int32           speakerID,
-		size_t          talkTrackIndex,
-		size_t          maxFrames,
+		const FilePath& joinedOutPath,
+		const int32     speakerID,
+		const size_t    talkTrackIndex,
+		const size_t    maxFrames,
 		const URL& synthesisURL)
-	{
-		// 互換用：分割ファイルも作りつつ、連結版も出しておく
-		const FilePath joined = outputPrefix + U"_joined.wav";
-
-		return SynthesizeFromVVProjWrapperSplitTalkJoin(
-			vvprojPath,
-			outputPrefix,
-			joined,
-			speakerID,
-			talkTrackIndex,
-			maxFrames,
-			synthesisURL);
-	}
-
-	[[nodiscard]]
-	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
-		const FilePath& vvprojPath,    // 入力 .vvproj
-		const FilePath& outputPrefix,  // 分割WAV出力: prefix_0.wav, prefix_1.wav, ...
-		const FilePath& joinedOutPath, // 連結WAV出力
-		const int32     speakerID,     // talk Speaker ID
-		const size_t    talkTrackIndex,// 参照トラック index
-		const size_t    maxFrames,     // 1セグメント最大フレーム数（93.75fps換算）
-		const URL& synthesisURL   // /synthesis?speaker=...
-	)
 	{
 		FileSystem::CreateDirectories(U"tmp");
 
@@ -651,7 +666,7 @@ namespace VOICEVOX
 					current.clear();
 					frameSum = 0;
 					carry = 0.0;
-					gapsSec << (Max(0.0, gapSec) -0.2585); // この境界の休符秒 0.260は微調整
+					gapsSec << (Max(0.0, gapSec) - 0.2585); // この境界の休符秒 0.260は微調整
 				}
 				else
 				{
@@ -731,7 +746,15 @@ namespace VOICEVOX
 		return joined.save(joinedOutPath);
 	}
 
-	[[nodiscard]]
+	/// @brief テキストから talk 音声合成用 クエリ JSON ファイルを作成して保存します。
+	/// @param text 音声合成するテキスト
+	/// @param speakerID talk 音声合成に使用する話者 ID
+	/// @param intonationScale 抑揚
+	/// @param speedScale 話速
+	/// @param volumeScale 音量
+	/// @param pitchScale ピッチ
+	/// @param timeout タイムアウト時間
+	/// @return クエリ作成に成功した場合 true, 失敗した場合 false を返します。
 	JSON CreateQuery(const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
 		const Duration timeout)
@@ -766,7 +789,13 @@ namespace VOICEVOX
 		return query;
 	}
 
-	[[nodiscard]]
+	/// @brief VOICEVOX プロジェクトファイル（.vvproj）を解析し、talk 音声合成用のクエリ JSON を作成して保存します。
+	/// @param vvprojPath 入力の VOICEVOX プロジェクトファイルのパス
+	/// @param outJsonPath 出力のクエリ JSON ファイルパス
+	/// @param speakerID 使用する話者 ID
+	/// @param outTalkStartSec トーク開始位置（秒）を格納するポインタ（不要なら nullptr）
+	/// @param talkTrackIndex 解析対象トラックのインデックス（0～）
+	/// @return 成功した場合 true、失敗した場合 false を返します。
 	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
 									  const int32 speakerID, double* outTalkStartSec, size_t talkTrackIndex)

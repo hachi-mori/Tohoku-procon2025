@@ -218,17 +218,10 @@ void Main()
 					const FilePath talkPrefix = U"Voice/" + base + U"-" + SingerLabels[selIdx]
 						+ U"_talk_track" + Format(i + 1);
 
-					// 分割合成＋休符無音を挟んで連結（wrapper: joined も一緒に作る）
-					if (VOICEVOX::SynthesizeFromVVProjWrapperSplitTalk(
-						*vvprojPath,      // 入力 vvproj
-						talkPrefix,       // 出力プレフィックス
-						talkSpkID,        // talk speaker ID
-						i + charCount,    // talkTrackIndex（現状の設計どおり）
-						2500*1.5,             // maxFrames（song の1.5倍はいける？）
-						talksynthURL))    // /synthesis
+					const FilePath joinedTalk = talkPrefix + U"_joined.wav";
+					if (VOICEVOX::SynthesizeFromVVProjWrapperSplitTalkJoin(
+						*vvprojPath, talkPrefix, joinedTalk, talkSpkID, i + charCount, 2500 * 1.5, talksynthURL))
 					{
-						// 連結済みファイルを読む（prefix_joined.wav）
-						const FilePath joinedTalk = talkPrefix + U"_joined.wav";
 						if (FileSystem::Exists(joinedTalk))
 						{
 							talkAudio[i] = Audio{ joinedTalk };
