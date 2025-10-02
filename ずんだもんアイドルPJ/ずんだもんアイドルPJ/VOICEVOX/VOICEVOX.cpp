@@ -168,11 +168,12 @@ namespace VOICEVOX
 	}
 
 	/// @brief VOICEVOX API /singers から歌手リストを取得します。
+	/// @param baseURL VOICEVOX エンジンのベースURL
 	/// @param timeout タイムアウト時間
 	/// @return Singer の配列。失敗した場合は空配列を返します。
-	Array<Singer> GetSingers(const Duration timeout)
+	Array<Singer> GetSingers(const URL& baseURL, const Duration timeout)
 	{
-		constexpr URLView url = U"http://localhost:50021/singers";
+		const URL url = U"{}/singers"_fmt(baseURL);
 
 		AsyncHTTPTask task = SimpleHTTP::GetAsync(url, {});
 		Stopwatch     sw{ StartImmediately::Yes };
@@ -386,16 +387,16 @@ namespace VOICEVOX
 	/// @brief song 歌声合成の分割合成ラッパー。
 	/// @param inputPath 入力　の song クエリ JSON ファイルパス
 	/// @param outputPath 出力 の WAV ファイルパス
-	/// @param queryURL song 歌声合成 の API エンドポイント URL
-	/// @param synthesisURL 歌声合成の API エンドポイント URL
+	/// @param speakerID 歌声ID
+	/// @param baseURL VOICEVOX エンジンのベースURL
 	/// @param maxFrames song クエリ分割時の 1 セグメントあたりの最大フレーム数
 	/// @param keyShift 移調量（半音）。上げる=正、下げる=負。
 	/// @return 成功した場合 true、失敗した場合 false を返します。
 	bool VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-		const FilePath& inputPath,          // ScoreQuery.json
-		const FilePath& outputPath,         // 出力 WAV
-		const URL& queryURL,           // /sing_frame_audio_query
-		const URL& synthesisURL,       // /frame_synthesis
+		const FilePath& inputPath,
+		const FilePath& outputPath,
+		const int32& speakerID,
+		const URL& baseURL,
 		size_t          maxFrames,
 		int             keyShift)
 	{
@@ -511,6 +512,7 @@ namespace VOICEVOX
 			segments[i].save(tmpScore);
 
 			// ScoreQuery → SingQuery
+			const URL queryURL = U"{}/sing_frame_audio_query?speaker=6000"_fmt(baseURL);
 			if (!VOICEVOX::SynthesizeFromJSONFile(tmpScore, tmpQuery, queryURL))
 			{
 				Console(U"SingQuery 作成失敗 (分割 " + Format(i) + U")");
@@ -535,7 +537,8 @@ namespace VOICEVOX
 			}
 
 			// SingQuery → WAV
-			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, synthesisURL))
+			const URL songsynthURL = U"{}/frame_synthesis?speaker={}"_fmt(baseURL,speakerID);
+			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, songsynthURL))
 			{
 				Console(U"音声合成失敗 (分割 " + Format(i) + U")");
 				return false;
@@ -591,22 +594,22 @@ namespace VOICEVOX
 	}
 
 	/// @brief talk 音声合成の分割合成ラッパー。
+	/// @param baseURL VOICEVOX エンジンのベースURL
 	/// @param vvprojPath 入力の VOICEVOX プロジェクトファイルパス（.vvproj）
 	/// @param outputPrefix 出力の分割 WAV ファイル接頭辞（prefix_0.wav, ...）
 	/// @param joinedOutPath 出力の連結 WAV ファイルパス
 	/// @param speakerID 使用する talk 話者 ID
 	/// @param talkTrackIndex 対象トラックのインデックス
 	/// @param maxFrames 分割合成時の1セグメントあたりの最大フレーム数（93.75fps換算）
-	/// @param synthesisURL talk 音声合成 API のエンドポイント URL
 	/// @return 成功した場合 true、失敗した場合 false を返します。
 	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
+		const URL& baseURL,
 		const FilePath& vvprojPath,
 		const FilePath& outputPrefix,
 		const FilePath& joinedOutPath,
 		const int32     speakerID,
 		const size_t    talkTrackIndex,
-		const size_t    maxFrames,
-		const URL& synthesisURL)
+		const size_t    maxFrames)
 	{
 		FileSystem::CreateDirectories(U"tmp");
 
@@ -699,9 +702,10 @@ namespace VOICEVOX
 
 			const FilePath tmpQueryPath = U"tmp/tmp_talkquery_" + Format(si) + U".json";
 			double dummyStart = 0.0;
-			if (!VOICEVOX::ConvertVVProjToTalkQueryJSON(tmpVvprojPath, tmpQueryPath, speakerID, &dummyStart, 0)) continue;
+			if (!VOICEVOX::ConvertVVProjToTalkQueryJSON(baseURL, tmpVvprojPath, tmpQueryPath, speakerID, &dummyStart, 0)) continue;
 
 			const FilePath outWav = outputPrefix + U"_" + Format(si) + U".wav";
+			const URL synthesisURL = U"{}/synthesis?speaker={}"_fmt(baseURL, speakerID);
 			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQueryPath, outWav, synthesisURL)) continue;
 
 			partWavs << outWav;
@@ -747,6 +751,7 @@ namespace VOICEVOX
 	}
 
 	/// @brief テキストから talk 音声合成用 クエリ JSON ファイルを作成して保存します。
+	/// @param baseURL VOICEVOX エンジンのベースURL
 	/// @param text 音声合成するテキスト
 	/// @param speakerID talk 音声合成に使用する話者 ID
 	/// @param intonationScale 抑揚
@@ -754,12 +759,12 @@ namespace VOICEVOX
 	/// @param volumeScale 音量
 	/// @param pitchScale ピッチ
 	/// @param timeout タイムアウト時間
-	/// @return クエリ作成に成功した場合 true, 失敗した場合 false を返します。
-	JSON CreateQuery(const String text, const int32 speakerID,
+	/// @return クエリ作成に成功した場合 取得したクエリ JSON。失敗した場合は JSON::Invalid() を返します。
+	JSON CreateQuery(const URL& baseURL, const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
 		const Duration timeout)
 	{
-		const URL url = U"http://localhost:50021/audio_query?text={}&speaker={}"_fmt(PercentEncode(text), speakerID);
+		const URL url = U"{}/audio_query?text={}&speaker={}"_fmt(baseURL, PercentEncode(text), speakerID);
 		const std::string data = JSON{}.formatUTF8Minimum();
 		AsyncHTTPTask task = SimpleHTTP::PostAsync(url, {}, data.data(), data.size());
 		Stopwatch stopwatch{ StartImmediately::Yes };
@@ -790,13 +795,14 @@ namespace VOICEVOX
 	}
 
 	/// @brief VOICEVOX プロジェクトファイル（.vvproj）を解析し、talk 音声合成用のクエリ JSON を作成して保存します。
+	/// @param baseURL VOICEVOX エンジンのベースURL
 	/// @param vvprojPath 入力の VOICEVOX プロジェクトファイルのパス
 	/// @param outJsonPath 出力のクエリ JSON ファイルパス
 	/// @param speakerID 使用する話者 ID
 	/// @param outTalkStartSec トーク開始位置（秒）を格納するポインタ（不要なら nullptr）
 	/// @param talkTrackIndex 解析対象トラックのインデックス（0～）
 	/// @return 成功した場合 true、失敗した場合 false を返します。
-	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
+	bool ConvertVVProjToTalkQueryJSON(const URL& baseURL, const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
 									  const int32 speakerID, double* outTalkStartSec, size_t talkTrackIndex)
 	{
@@ -906,6 +912,7 @@ namespace VOICEVOX
 
 		// ④ /audio_query に投げてベースクエリを取得
 		JSON query = CreateQuery(
+			baseURL,
 			text, speakerID,
 			/*intonationScale*/ 1.0,
 			/*speedScale*/      1.0,

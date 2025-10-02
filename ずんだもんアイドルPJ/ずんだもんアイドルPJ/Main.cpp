@@ -19,7 +19,6 @@ void Main()
 	const Font font{ FontMethod::MSDF, 48 , fontpath };
 
 	// 時間を管理する変数
-	double accumulatedTime = 0;
 	bool waitingToPlay = false;
 	double waitTimer = 0.0;
 
@@ -43,7 +42,10 @@ void Main()
 	Array<String> StyleNames;     // スタイル名 : ノーマル
 	Array<int32>  SingerIDs;      // VOICEVOX スタイル ID
 
-	for (const auto& spk : VOICEVOX::GetSingers())
+	// 
+	const URL baseURL = U"http://localhost:50021";
+
+	for (const auto& spk : VOICEVOX::GetSingers(baseURL))
 	{
 		if (!spk.styles.isEmpty())
 		{
@@ -66,7 +68,7 @@ void Main()
 	// 共通パス
 	Optional<FilePath> vvprojPath;
 	const FilePath singQuery = U"Query/SingQuery.json";
-	const URL     queryURL = U"http://localhost:50021/sing_frame_audio_query?speaker=6000";
+
 
 	// フェードイン演出（簡易）
 	for (double i = 0; i > 1.0; i += 0.1)
@@ -107,7 +109,8 @@ void Main()
 
 		// 横位置を均等割り
 		Array<Vec2> centers;
-		const double step = Scene::Width() / (charCount + 1);
+		const double step = static_cast<double>(Scene::Width()) / (charCount + 1);
+
 		for (size_t i = 0; i < charCount; ++i)
 			centers << Vec2{ step * (i + 1), kCenterY };
 
@@ -182,9 +185,6 @@ void Main()
 				const int32  spkID = SingerIDs[selIdx];
 				const int32  talkSpkID = spkID - 3000;
 
-				const URL songsynthURL = U"http://localhost:50021/frame_synthesis?speaker={}"_fmt(spkID);
-				const URL talksynthURL = U"http://localhost:50021/synthesis?speaker={}"_fmt(talkSpkID);
-
 				FilePath songwav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
 					+ U"_track" + Format(i + 1) + U".wav";
 				FilePath talkwav = U"Voice/" + base + U"-" + SingerLabels[selIdx]
@@ -198,13 +198,13 @@ void Main()
 				// ★ vvproj(talk) → Talk Query JSON（失敗しても歌は続行）
 				FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
 				double talkStartSec = 0.0;
-				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(*vvprojPath, talkOut, talkSpkID, &talkStartSec, i + charCount);
+				const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(baseURL, *vvprojPath, talkOut, talkSpkID, &talkStartSec, i + charCount);
 				talkStartSecs[i] = Max(0.0, talkStartSec - 0.155); // 念のため 0 以上にクランプ 0.155は微調整
 
 				// ── 歌（分割あり）は必ず実行
 				int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
-					score, singQuery, songwav, queryURL, songsynthURL, 2500, keyShift))
+					score, songwav, spkID, baseURL, 2500, keyShift))
 				{
 					songAudio[i] = Audio{ songwav };
 					FileSystem::Remove(score); // 一時Score掃除
@@ -220,7 +220,7 @@ void Main()
 
 					const FilePath joinedTalk = talkPrefix + U"_joined.wav";
 					if (VOICEVOX::SynthesizeFromVVProjWrapperSplitTalkJoin(
-						*vvprojPath, talkPrefix, joinedTalk, talkSpkID, i + charCount, 2500 * 1.5, talksynthURL))
+						baseURL, *vvprojPath, talkPrefix, joinedTalk, talkSpkID, i + charCount, 2500 * 1.5))
 					{
 						if (FileSystem::Exists(joinedTalk))
 						{

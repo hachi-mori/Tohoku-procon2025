@@ -28,7 +28,7 @@ namespace VOICEVOX
 								int semitone);
 
 	// VOICEVOX サーバから Singer 一覧を取得する（タイムアウト時は空配列）
-	Array<Singer> GetSingers(Duration timeout = SecondsF{ 5.0 });
+	Array<Singer> GetSingers(const URL& baseURL, Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj のトラック数を取得する（trackOrder があればそのサイズ）
 	size_t GetVVProjTrackCount(const FilePath& vvprojPath);
@@ -51,8 +51,8 @@ namespace VOICEVOX
 	bool SynthesizeFromJSONFileWrapperSplit(
 		const FilePath& inputPath,
 		const FilePath& outputPath,
-		const URL& queryURL,
-		const URL& synthesisURL,
+		const int32& speakerID,
+		const URL& baseURL,
 		size_t maxFrames = 2500,
 		int keyShift = 0
 	);
@@ -60,22 +60,23 @@ namespace VOICEVOX
 	// talk 音声合成の分割合成ラッパー
 	[[nodiscard]]
 	bool SynthesizeFromVVProjWrapperSplitTalkJoin(
+		const URL& baseURL,
 		const FilePath& vvprojPath,
 		const FilePath& outputPrefix,
 		const FilePath& joinedOutPath,
 		int32           speakerID,
 		size_t          talkTrackIndex,
-		size_t          maxFrames,
-		const URL& synthesisURL);   // ★ 統一
+		size_t          maxFrames);
 
 	// テキストを VOICEVOX に送信して Talk Query JSON を取得する
-	JSON CreateQuery(const String text, const int32 speakerID,
+	[[nodiscard]]
+	JSON CreateQuery(const URL& baseURL, const String text, const int32 speakerID,
 		const double intonationScale, const double speedScale, const double volumeScale, const double pitchScale,
 		const Duration timeout = SecondsF{ 5.0 });
 
 	// vvproj(talk) を Talk Query JSON に変換して保存する
 	[[nodiscard]]
-	bool ConvertVVProjToTalkQueryJSON(const FilePath& vvprojPath,
+	bool ConvertVVProjToTalkQueryJSON(const URL& baseURL, const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
 									  const int32 speakerID, double* outTalkStartSecm, size_t talkTrackIndex);
 }
