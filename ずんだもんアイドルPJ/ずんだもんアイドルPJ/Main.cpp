@@ -11,7 +11,7 @@ void Main()
 	size_t charCount = 0;                         // vvproj 読込で決定  
 
 	// 背景画像
-	const Texture background{ U"Texture/background1.jpg" };
+	//const Texture background{ U"Texture/background1.jpg" };
 	const Texture song_title{ U"Texture/song_title.png" };
 
 	// テキスト表示
@@ -42,7 +42,6 @@ void Main()
 	Array<String> StyleNames;     // スタイル名 : ノーマル
 	Array<int32>  SingerIDs;      // VOICEVOX スタイル ID
 
-	// 
 	const URL baseURL = U"http://localhost:50021";
 
 	for (const auto& spk : VOICEVOX::GetSingers(baseURL))
@@ -94,7 +93,7 @@ void Main()
 	// ─────────────────────────────
 	while (System::Update())
 	{
-		background.draw(Arg::center = Scene::Center());
+		// background.draw(Arg::center = Scene::Center());
 
 		// vvproj 選択
 		if (SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 }))
@@ -102,7 +101,7 @@ void Main()
 			vvprojPath = Dialog::OpenFile({ { U"VOICEVOX Project", { U"vvproj" } } });
 			if (vvprojPath)
 			{
-				charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath) / 2, kMaxCharacters);
+				charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath) /*/ 2*/, kMaxCharacters);
 			}
 		}
 		if (charCount == 0) continue;           // 未選択  
@@ -206,7 +205,7 @@ void Main()
 				if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(
 					score, songwav, spkID, baseURL, 2500, keyShift))
 				{
-					songAudio[i] = Audio{ songwav };
+					songAudio[i] = Audio{ songwav , Loop::Yes };
 					FileSystem::Remove(score); // 一時Score掃除
 				}
 
@@ -235,7 +234,7 @@ void Main()
 							VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]));
 			}
 
-			audio_inst = Audio{ U"Inst/" + base + U".mp3" };
+			audio_inst = Audio{ U"Inst/" + base + U".mp3" , Loop::Yes };
 			Console << U"「" + base + U"」の再生準備が完了しました。\t";
 		}
 
@@ -289,21 +288,38 @@ void Main()
 			}
 		}
 
+		// ───────── 歌唱キャラ選択（ラジオ） ─────────
+		static size_t selectedCharIndex = 0;
+
+		// 表示ラベル生成（トラック数ぶん）
+		Array<String> charLabels;
+		for (size_t i = 0; i < charCount; ++i) {
+			charLabels << U"キャラ {}"_fmt(i + 1);
+		}
+
+		// ガード：charCount が減った時のはみ出し防止
+		if (selectedCharIndex >= charCount) {
+			selectedCharIndex = 0;
+		}
+
+		// ラジオボタン（charCount>0 のときだけ）
+		if (charCount > 0) {
+			SimpleGUI::RadioButtons(selectedCharIndex, charLabels, Vec2{ 1300, 840 });
+		}
+
 		// ─────────── 音量調整 ───────────
-		// 同時に再生する人数に応じた音量係数を返す
 		auto calcSingerVolume = [](size_t n)
 			{
 				switch (n)
 				{
-				case 0:  return 1.0;  // 0人
-				case 1:  return 1.0;  // 1人
-				case 2:  return 0.7;  // 2人（例）
-				case 3:  return 0.65;  // 3人
-				default: return 0.6;  // 4人以上は控えめに
+				case 0:  return 1.0;
+				case 1:  return 1.0;
+				case 2:  return 0.7;
+				case 3:  return 0.65;
+				default: return 0.6;
 				}
 			};
 
-		// 人数に応じた音量・パンに変更
 		if (audio_inst.isPlaying())
 		{
 			playElapsedSec += Scene::DeltaTime();
@@ -312,7 +328,7 @@ void Main()
 			{
 				if (talkPending[i] && (playElapsedSec >= talkStartSecs[i]))
 				{
-					talkAudio[i].play();   // ここで初めて再生
+					talkAudio[i].play();
 					talkPending[i] = false;
 				}
 			}
@@ -337,22 +353,29 @@ void Main()
 			const size_t n = singingIdx.size();
 			const Array<double>& pans = panTable[Min(n, static_cast<size_t>(5))];
 
-			/* ① 歌っている人 には定位置パン */
 			for (size_t j = 0; j < n; ++j)
 			{
 				const size_t idx = singingIdx[j];
 				if (!songAudio[idx].isEmpty()) songAudio[idx].setPan(pans[j]);
-				if (!talkAudio[idx].isEmpty()) talkAudio[idx].setPan(pans[j]);              // 例: -0.3, +0.3
+				if (!talkAudio[idx].isEmpty()) talkAudio[idx].setPan(pans[j]);
 			}
 
-			/* ② 歌っていない人 は中央に戻す */
-			for (size_t i = 0; i < charCount; ++i) {
+			for (size_t i = 0; i < charCount; ++i)
+			{
 				if (!singingIdx.contains(i)) {
 					if (!songAudio[i].isEmpty()) songAudio[i].setPan(0.0);
 					if (!talkAudio[i].isEmpty()) talkAudio[i].setPan(0.0);
 				}
 			}
 
+			/* ─ ソロ指定の最終上書き（選択=1.0、他=0.0） ─ */
+			const size_t solo = Min(selectedCharIndex, charCount - 1);
+			for (size_t i = 0; i < charCount; ++i)
+			{
+				const double v = (i == solo) ? 1.0 : 0.0;
+				if (!songAudio[i].isEmpty()) songAudio[i].setVolume(v);
+				if (!talkAudio[i].isEmpty()) talkAudio[i].setVolume(v);
+			}
 		}
 	}
 }
