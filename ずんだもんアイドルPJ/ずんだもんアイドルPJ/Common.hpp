@@ -1,6 +1,12 @@
 ﻿# pragma once
 # include <Siv3D.hpp>
-# include "VOICEVOX/VOICEVOX.hpp"
+struct SolvedTask
+{
+	String phrase;                  // お題
+	Array<String> syllables;        // お題の音節リスト
+	String userInput;               // ユーザー入力
+	Array<String> userSyllables;    // 入力の音節リスト
+};
 
 // 共有するデータ
 struct GameData
@@ -28,6 +34,8 @@ struct GameData
 	bool readyToPlay = false;
 
 	Array<String> SingingNames; // 実際に歌っているキャラの名前
+
+	Array<SolvedTask> solvedTasks; // 成功した結果を保持
 };
 
 using App = SceneManager<String, GameData>;

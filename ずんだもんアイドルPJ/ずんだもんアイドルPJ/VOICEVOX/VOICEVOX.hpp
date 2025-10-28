@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <Siv3D.hpp>
+# include "Common.hpp"
 
 namespace VOICEVOX
 {
@@ -79,4 +80,8 @@ namespace VOICEVOX
 	bool ConvertVVProjToTalkQueryJSON(const URL& baseURL, const FilePath& vvprojPath,
 									  const FilePath& outJsonPath,
 									  const int32 speakerID, double* outTalkStartSecm, size_t talkTrackIndex);
+
+	// vvproj(talk) から発話テキストを抽出する
+	Array<String> ExtractTalkUtterances(const FilePath& vvprojPath);
+
 }

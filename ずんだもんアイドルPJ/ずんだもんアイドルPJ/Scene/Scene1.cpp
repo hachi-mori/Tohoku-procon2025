@@ -3,11 +3,17 @@
 Scene1::Scene1(const InitData& init)
 	: IScene{ init }
 {
-	// ウィンドウ設定（Main(3) の冒頭設定と同等）
-	Window::SetTitle(U"SHINE VOX");
-	Window::Resize(1920, 1080);
-	Scene::SetResizeMode(ResizeMode::Keep);
-	Window::SetStyle(WindowStyle::Sizable);
+	Print << U"===== Scene3: 受け取った結果 =====";
+
+	// 共有データを直接参照して表示
+	    for (const auto& t : getData().solvedTasks)
+    {
+        Print << U"お題：" << t.phrase;
+        Print << U"  音節リスト：" << t.syllables; // 例: [え, ぶ, り, で, い]
+        Print << U"入力：" << t.userInput;
+        Print << U"  入力の音節リスト：" << t.userSyllables;
+    }
+
 
 	// ==== VOICEVOX スピーカー情報の初期化 ====
 	for (const auto& spk : VOICEVOX::GetSingers(baseURL))
@@ -48,29 +54,17 @@ Scene1::Scene1(const InitData& init)
 	{
 		song_title.draw(Arg::center = Scene::Center(), ColorF{ 1.0, i * 0.5 });
 	}
+
+	vvprojPath = getData().vvprojPath;
+
+	if (vvprojPath)
+	{
+		charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath), kMaxCharacters);
+	}
 }
 
 void Scene1::update()
 {
-	//------------------------------------
-	// 🎵 vvproj ファイルの選択ボタン
-	//------------------------------------
-	if (SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 }))
-	{
-		vvprojPath = Dialog::OpenFile({ { U"VOICEVOX Project", { U"vvproj" } } });
-
-		if (vvprojPath)
-		{
-			charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath), kMaxCharacters);
-		}
-	}
-
-	if (charCount == 0)
-	{
-		// ファイル未選択ならここで更新終了（while→return に変更）
-		return;
-	}
-
 	//------------------------------------
 	// 🎨 キャラ配置の計算
 	//------------------------------------
@@ -259,7 +253,7 @@ void Scene1::draw() const
 	}
 
 	//  ⑥ GUI部品（最前面・右側操作系）
-	SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 });
+	//SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 });
 	SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 880 }, unspecified, vvprojPath.has_value());
 	SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 });
 

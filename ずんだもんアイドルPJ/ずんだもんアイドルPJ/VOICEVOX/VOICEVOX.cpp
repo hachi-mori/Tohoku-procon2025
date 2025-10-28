@@ -1,4 +1,4 @@
-﻿# include "../stdafx.h"
+﻿# include "VOICEVOX.hpp"
 
 namespace VOICEVOX
 {
@@ -537,7 +537,7 @@ namespace VOICEVOX
 			}
 
 			// SingQuery → WAV
-			const URL songsynthURL = U"{}/frame_synthesis?speaker={}"_fmt(baseURL,speakerID);
+			const URL songsynthURL = U"{}/frame_synthesis?speaker={}"_fmt(baseURL, speakerID);
 			if (!VOICEVOX::SynthesizeFromJSONFile(tmpQuery, tmpWav, songsynthURL))
 			{
 				Console(U"音声合成失敗 (分割 " + Format(i) + U")");
@@ -1136,5 +1136,82 @@ namespace VOICEVOX
 
 		// ⑥ 取得したクエリを保存
 		return query.save(outJsonPath);
+	}
+
+	/// @brief VOICEVOX の .vvproj から talk の発話テキストを順番に取り出します。
+	/// @param vvprojPath 入力となる .vvproj ファイルのパス
+	/// @return 発話ごとの文字列を格納した配列。失敗時は空配列を返します。
+	Array<String> ExtractTalkUtterances(const FilePath& vvprojPath)
+	{
+		Array<String> utterances;
+
+		// vvproj を読む
+		const JSON src = JSON::Load(vvprojPath);
+		if (!src)
+		{
+			Console << U"[ExtractTalkUtterances] vvproj 読み込み失敗: " << vvprojPath;
+			return utterances; // 空のまま返す
+		}
+
+		// "talk" があるかチェック
+		if (!src.contains(U"talk") || !src[U"talk"].isObject())
+		{
+			Console << U"[ExtractTalkUtterances] talk セクションなし: " << vvprojPath;
+			return utterances;
+		}
+
+		const JSON& talk = src[U"talk"];
+
+		// talk.audioKeys が配列として存在するか？
+		if (!talk.contains(U"audioKeys") || !talk[U"audioKeys"].isArray())
+		{
+			Console << U"[ExtractTalkUtterances] audioKeys が配列じゃない: " << vvprojPath;
+			return utterances;
+		}
+
+		// talk.audioItems がオブジェクトとして存在するか？
+		if (!talk.contains(U"audioItems") || !talk[U"audioItems"].isObject())
+		{
+			Console << U"[ExtractTalkUtterances] audioItems がオブジェクトじゃない: " << vvprojPath;
+			return utterances;
+		}
+
+		const JSON& audioItems = talk[U"audioItems"];
+
+		// audioKeys の順番に従って text を取り出していく
+		for (auto&& keyNode : talk[U"audioKeys"].arrayView())
+		{
+			// key は "24e8b27f-..." のようなID
+			if (!keyNode.isString())
+			{
+				continue;
+			}
+
+			const String key = keyNode.getString();
+
+			// audioItems[key] があるか？
+			if (!audioItems.contains(key) || !audioItems[key].isObject())
+			{
+				Console << U"[ExtractTalkUtterances] audioItems に key が見つからない: " << key;
+				continue;
+			}
+
+			const JSON& item = audioItems[key];
+
+			// "text" があるならそれを取り出す
+			if (item.contains(U"text") && item[U"text"].isString())
+			{
+				const String phrase = item[U"text"].getString();
+				utterances << phrase;
+			}
+			else
+			{
+				// text 無しの場合は空文字を入れる？それともスキップ？
+				// どっちもアリだけど、ここではスキップにします
+				Console << U"[ExtractTalkUtterances] text が無い (key=" << key << U")";
+			}
+		}
+
+		return utterances;
 	}
 }
