@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include <Siv3D.hpp>
-# include "Common.hpp"
+# include "../Common.hpp"
 
 namespace VOICEVOX
 {
@@ -84,4 +84,9 @@ namespace VOICEVOX
 	// vvproj(talk) から発話テキストを抽出する
 	Array<String> ExtractTalkUtterances(const FilePath& vvprojPath);
 
+
+	JSON ApplyParodyLyrics(
+		const JSON& vvprojOriginal,
+		const Array<SolvedTask>& solvedTasks
+	);
 }

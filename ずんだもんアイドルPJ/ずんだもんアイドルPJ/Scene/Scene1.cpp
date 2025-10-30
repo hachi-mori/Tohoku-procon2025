@@ -141,24 +141,39 @@ void Scene1::update()
 	if (SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 880 }, unspecified, vvprojPath.has_value()))
 	{
 		const String base = FileSystem::BaseName(*vvprojPath);
-		getData().SingingNames.clear();  // ← 初期化しておく
+		getData().SingingNames.clear();
+
+		// ① 元vvprojを一回読み込む
+		const JSON originalVV = JSON::Load(*vvprojPath);
 
 		for (size_t i = 0; i < charCount; ++i)
 		{
 			const uint64 selIdx = SingerUI[i].selectedItemIndex.value_or(0);
 			const String singerName = SingerNames[selIdx];
-			getData().SingingNames << singerName; 
+			getData().SingingNames << singerName;
 
 			const int32  spkID = SingerIDs[selIdx];
 			const int32  talkSpkID = spkID - 3000;
 
+			// ② このトラック用に歌詞差し替えした vvproj を作って保存
+			JSON parodyVV = VOICEVOX::ApplyParodyLyrics(
+				originalVV,
+				getData().solvedTasks
+			);
+
+			// 一時vvproj
+			FilePath vvTmp = U"tmp/tmp_modified_" + base + U"_track" + Format(i + 1) + U".vvproj";
+			parodyVV.save(vvTmp);
+
+			// ③ スコアJSONへの変換は、元vvprojではなくvvTmpを使う
+			FilePath score = U"tmp/tmp_" + base + U"_track" + Format(i + 1) + U".json";
+			if (!VOICEVOX::ConvertVVProjToScoreJSON(vvTmp, score, i))
+			{
+				continue;
+			}
+
 			FilePath songwav = U"Voice/" + base + U"-" + SingerLabels[selIdx] + U"_track" + Format(i + 1) + U".wav";
 			FilePath talkwav = U"Voice/" + base + U"-" + SingerLabels[selIdx] + U"_talk_track" + Format(i + 1) + U".wav";
-
-			FilePath score = U"tmp/tmp_" + base + U"_track" + Format(i + 1) + U".json";
-
-			if (!VOICEVOX::ConvertVVProjToScoreJSON(*vvprojPath, score, i))
-				continue;
 
 			FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
 			double talkStartSec = 0.0;

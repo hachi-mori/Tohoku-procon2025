@@ -1214,4 +1214,179 @@ namespace VOICEVOX
 
 		return utterances;
 	}
+
+	// 音節列置き換え（1回だけ）
+	static void OverwriteSequenceOnce(
+		Array<String>& lyricsSeq,
+		const Array<String>& target,
+		const Array<String>& replacement
+	)
+	{
+		if (target.isEmpty()) return;
+		if (target.size() != replacement.size()) return;
+
+		for (size_t start = 0; start + target.size() <= lyricsSeq.size(); ++start)
+		{
+			bool match = true;
+			for (size_t k = 0; k < target.size(); ++k)
+			{
+				if (lyricsSeq[start + k] != target[k])
+				{
+					match = false;
+					break;
+				}
+			}
+
+			if (match)
+			{
+				for (size_t k = 0; k < target.size(); ++k)
+				{
+					lyricsSeq[start + k] = replacement[k];
+				}
+				break;
+			}
+		}
+	}
+
+	// vvproj の歌詞を替え歌に置き換える
+	JSON ApplyParodyLyrics(
+		const JSON& vvprojOriginal,
+		const Array<SolvedTask>& solvedTasks
+	)
+	{
+		// 元JSONをコピーして編集用にする
+		JSON modified = vvprojOriginal;
+
+		//-------------------------------------
+		// song / tracks の存在確認
+		//-------------------------------------
+		if (!modified.contains(U"song") || !modified[U"song"].isObject())
+		{
+			Print << U"[ApplyParodyLyrics] song ノードが存在しません";
+			return modified;
+		}
+
+		if (!modified[U"song"].contains(U"tracks")
+			|| !modified[U"song"][U"tracks"].isObject())
+		{
+			Print << U"[ApplyParodyLyrics] tracks ノードが存在しません";
+			return modified;
+		}
+
+		//-------------------------------------
+		// track の列挙順（trackOrder優先）
+		//-------------------------------------
+		Array<String> trackKeysInOrder;
+
+		if (modified[U"song"].contains(U"trackOrder")
+			&& modified[U"song"][U"trackOrder"].isArray())
+		{
+			for (auto&& keyNode : modified[U"song"][U"trackOrder"].arrayView())
+			{
+				if (keyNode.isString())
+				{
+					const String k = keyNode.getString();
+					if (modified[U"song"][U"tracks"].contains(k)
+						&& modified[U"song"][U"tracks"][k].isObject())
+					{
+						trackKeysInOrder << k;
+					}
+				}
+			}
+		}
+
+		// trackOrder が無い / 空 → tracks のキーを使う
+		if (trackKeysInOrder.isEmpty())
+		{
+			for (auto&& [k, tr] : modified[U"song"][U"tracks"])
+			{
+				if (tr.isObject())
+				{
+					trackKeysInOrder << k;
+				}
+			}
+		}
+
+		//-------------------------------------
+		// 各トラックに対して歌詞を置き換え
+		//-------------------------------------
+		for (const auto& trackKey : trackKeysInOrder)
+		{
+			if (!modified[U"song"][U"tracks"].contains(trackKey))
+				continue;
+
+			// ここを修正！
+			JSON trackNode = modified[U"song"][U"tracks"][trackKey]; // ← コピーに変更
+
+			if (!trackNode.isObject())
+				continue;
+
+			if (!trackNode.contains(U"notes") || !trackNode[U"notes"].isArray())
+				continue;
+
+			//-------------------------------------
+			// notes を読み込んで編集
+			//-------------------------------------
+			Array<JSON> noteList;
+			for (auto&& n : trackNode[U"notes"].arrayView())
+			{
+				noteList << n; // 値コピー
+			}
+
+			// position 昇順にソート
+			std::sort(noteList.begin(), noteList.end(),
+				[](const JSON& a, const JSON& b)
+				{
+					const int64 ap = a[U"position"].getOpt<int64>().value_or(0);
+					const int64 bp = b[U"position"].getOpt<int64>().value_or(0);
+					return ap < bp;
+				}
+			);
+
+			//-------------------------------------
+			// 歌詞ありノートだけ抽出
+			//-------------------------------------
+			Array<String> lyricsSeq;
+			Array<size_t> noteIndexMap;
+			for (size_t ni = 0; ni < noteList.size(); ++ni)
+			{
+				const auto lyrOpt = noteList[ni][U"lyric"].getOpt<String>();
+				if (lyrOpt && !lyrOpt->isEmpty())
+				{
+					lyricsSeq << *lyrOpt;
+					noteIndexMap << ni;
+				}
+			}
+
+			//-------------------------------------
+			// 替え歌置き換えを適用
+			//-------------------------------------
+			for (const auto& task : solvedTasks)
+			{
+				OverwriteSequenceOnce(
+					lyricsSeq,
+					task.syllables,
+					task.userSyllables
+				);
+			}
+
+			//-------------------------------------
+			// lyricsSeq を noteList に書き戻す
+			//-------------------------------------
+			for (size_t idx = 0; idx < noteIndexMap.size(); ++idx)
+			{
+				const size_t ni = noteIndexMap[idx];
+				noteList[ni][U"lyric"] = lyricsSeq[idx];
+			}
+
+			//-------------------------------------
+			// trackNode に安全に書き戻す
+			//-------------------------------------
+			// 書き戻し
+			trackNode[U"notes"] = JSON(noteList);
+			modified[U"song"][U"tracks"][trackKey] = trackNode; // ← 最後に戻す！
+		}
+
+		return modified;
+	}
 }
