@@ -13,12 +13,7 @@ public:
 	void draw() const override;
 
 private:
-	// === Scene1 から引き継ぐデータ ===
-	Array<Audio> songAudio;
-	Audio audio_inst;
-
-	FilePath vvprojPath;
-	String songTitle;
+	Texture frame{ U"Texture/assets/result_frame.png" };
 
 	// GIF アニメーション画像を開く
 	const AnimatedGIFReader gif{ U"Texture/assets/result_background.gif" };
@@ -30,4 +25,14 @@ private:
 	Array<Image> images2;
 	mutable Array<int32> delays2;
 	Array<Texture> textures2;
+
+	const FilePath fontpath = U"Texture/Futehodo-MaruGothic.ttf";
+	Font m_font{ FontMethod::MSDF, 60 , fontpath };
+	Color kogetyaColor = { 134,79,9 };
+	Color goldColor = { 243,174,6 };
+
+	Texture titleButton{ U"Texture/assets/button/title.png" };
+	double titleButtonScale = 1.0;
+	Vec2 titleButtonCenter = Scene::Center().movedBy(-850, 430);
+	SizeF titleButtonSize = titleButton.size() * (titleButtonScale - 0.05);	// 画像スケールから少しだけ小さくする
 };

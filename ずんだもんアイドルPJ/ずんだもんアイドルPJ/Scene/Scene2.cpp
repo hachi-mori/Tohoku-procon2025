@@ -1,6 +1,6 @@
 ﻿#include "Scene2.hpp"
 
-// Scene2::Scene2 (コンストラクタ) ... 既存コード
+// Scene2::Scene2 (コンストラクタ) 
 Scene2::Scene2(const InitData& init)
 	: IScene{ init }, m_textState{}
 {
@@ -35,7 +35,7 @@ Scene2::Scene2(const InitData& init)
 
 }
 
-// Scene2::splitSyllables (音節分割関数) ... 既存コード
+// Scene2::splitSyllables (音節分割関数)
 Array<String> Scene2::splitSyllables(const String& text) const
 {
 	const String smallKanaList = U"ゃゅょぁぃぅぇぉっャュョァィゥェォッ";
@@ -56,7 +56,7 @@ Array<String> Scene2::splitSyllables(const String& text) const
 	return result;
 }
 
-// Scene2::getVowel (母音取得ヘルパー関数) ... 既存コード
+// Scene2::getVowel (母音取得ヘルパー関数) 
 char Scene2::getVowel(const String& syllable) const
 {
 	// 拗音（きゃ、しゅ、てょなど）は最後の母音、撥音/促音は N/Q
@@ -77,6 +77,52 @@ char Scene2::getVowel(const String& syllable) const
 
 	// ひらがな・カタカナ以外の文字（漢字や句読点など）が入ってきた場合のデフォルト
 	return 'X'; // 不明な母音として扱う
+}
+
+bool Scene2::isHiraganaOnly(const String& text) const
+{
+	for (const auto& ch : text)
+	{
+		if (!((U'ぁ' <= ch && ch <= U'ん') || ch == U'ー'))
+		{
+			return false; // ひらがな以外が含まれている
+		}
+	}
+	return true;
+}
+
+// 🎵 「ー」を直前の母音（あいうえお）に変換
+String Scene2::replaceChoonWithVowel(const String& text) const
+{
+	String result;
+
+	for (size_t i = 0; i < text.size(); ++i)
+	{
+		const char32 ch = text[i];
+
+		if (ch == U'ー' && !result.isEmpty())
+		{
+			const char vowel = getVowel(String(1, result.back()));
+
+			switch (vowel)
+			{
+			case 'a': result += U"あ"; break;
+			case 'i': result += U"い"; break;
+			case 'u': result += U"う"; break;
+			case 'e': result += U"え"; break;
+			case 'o': result += U"お"; break;
+			case 'N': result += U"ん"; break;
+			case 'Q': result += U"っ"; break;
+			default:  result += U"ら"; break; // 不明時はそのまま
+			}
+		}
+		else
+		{
+			result += ch;
+		}
+	}
+
+	return result;
 }
 
 void Scene2::update()
@@ -136,41 +182,55 @@ void Scene2::update()
 	// 音節数カウント
 	const Array<String> syllables = splitSyllables(m_textState.text);
 
-	// 現在のお題情報
-	/*
-	Print << U"🎯 現在のお題[" << currentIndex << U"]："
-		<< talkLines[currentIndex]
-		<< U"（必要音節数：" << currentTargetLen << U"）";
-
-	Print << U"⌨️ 入力：" << m_textState.text
-		<< U"（音節数：" << syllables.size() << U"）";
-		*/
-	
-
 	if (m_textState.enterKey)
 	{
 		m_textState.enterKey = false;
 
-		if (syllables.size() != currentTargetLen)
+		// ✅ ひらがな判定（ここを追加）
+		if (!isHiraganaOnly(m_textState.text))
 		{
-			Print << U"⚠️ 音節数エラー：" << syllables.size()
+			Print << U"⚠️ ひらがなのみで入力してください。";
+			m_textState.active = true;
+			return; // ← 処理を中断（送信しない）
+		}
+
+		// ✅ 先頭が長音ならエラー
+		if (!m_textState.text.isEmpty() && m_textState.text.front() == U'ー')
+		{
+			Print << U"⚠️ 言葉の先頭を「ー」から始めることはできません。";
+			m_textState.active = true;
+			return;
+		}
+
+		// ✅ 促音「っ」が含まれていたらエラー
+		if (m_textState.text.includes(U'っ'))
+		{
+			Print << U"⚠️ 「っ」を入力することはできません。";
+			m_textState.active = true;
+			return;
+		}
+
+		// ✅ 「ー」を直前の母音に変換
+		String normalizedText = replaceChoonWithVowel(m_textState.text);
+
+		const Array<String> syllables2 = splitSyllables(normalizedText);
+
+		if (syllables2.size() != currentTargetLen)
+		{
+			Print << U"⚠️ 音節数エラー：" << syllables2.size()
 				<< U"（必要：" << currentTargetLen << U"）";
 		}
 		else
 		{
-			// --- 🎯 スコア計算開始 ---
-
-			// お題の音韻配列とお題の音節数（L）
+			// 🎯 スコア処理は normalizedText を使う
 			const Array<String> targetSyllables = splitSyllables(talkLines[currentIndex]);
-			const size_t L = targetSyllables.size(); // == syllables.size() (currentTargetLen)
+			const size_t L = targetSyllables.size();
 
-			size_t matches = 0; // 母音一致数
-
-			// 母音の一致をカウント
+			size_t matches = 0;
 			for (size_t i = 0; i < L; ++i)
 			{
 				const char targetVowel = getVowel(targetSyllables[i]);
-				const char userVowel = getVowel(syllables[i]);
+				const char userVowel = getVowel(syllables2[i]);
 
 				if (targetVowel == userVowel)
 				{
@@ -193,8 +253,6 @@ void Scene2::update()
 			// 最終スコア S
 			const double score = r * lengthBonus;
 
-			// --- スコア計算終了 ---
-
 			// 🔔 個別のお題のパーセンテージの計算と出力
 			const double percentMatch = r * 100.0;
 
@@ -204,7 +262,6 @@ void Scene2::update()
 
 			*/
 
-
 			// 🏅 スコア表示とパーセンテージ表示を追加
 			//Console << U"🏅 スコア：" << score << U" (一致数:" << matches << U"/" << L << U")";
 			//Console << U"💯 韻一致率：" << percentMatch << U"%";
@@ -213,11 +270,11 @@ void Scene2::update()
 			getData().solvedTasks << SolvedTask{
 				.phrase = talkLines[currentIndex],
 				.syllables = targetSyllables,
-				.userInput = m_textState.text,
-				.userSyllables = syllables,
+				.userInput = normalizedText,
+				.userSyllables = syllables2,
 				.score = score,
 				.rhymeMatchPercent = percentMatch,
-				.matchesCount = matches // 👈 一致数を記録
+				.matchesCount = matches
 			};
 
 			// 次のお題へ
@@ -254,6 +311,14 @@ void Scene2::update()
 				// GameData に最終一致率を保存
 				getData().finalRhymeMatchPercent = finalRhymeMatchPercent;
 
+				// GameData に保存
+				String reconstructedLyrics;
+				for (const auto& task : getData().solvedTasks)
+				{
+					reconstructedLyrics += task.userInput + U"\n"; // 各フレーズを改行で結合
+				}
+				getData().fullLyrics = reconstructedLyrics;
+
 				// 結果出力
 				//Console << U"🌟 全体結果：" << totalMatches << U" / " << totalSyllables << U" 音韻一致";
 				//Console << U"💯 最終一致率：" << finalRhymeMatchPercent << U"%";
@@ -275,24 +340,13 @@ void Scene2::update()
 
 void Scene2::draw() const
 {
-	//GIFアニメーションの描画
 	ClearPrint();
-
-	// フレーム数
-
-	//Print << textures.size() << U" frames";
-
-	// 各フレームのディレイ（ミリ秒）一覧
-	// Print << U"delays: " << delays;
 
 	// アニメーションの経過時間
 	double t = Scene::Time();
 
 	// 経過時間と各フレームのディレイに基づいて、何番目のフレームを描けばよいかを計算する
 	size_t frameIndex = AnimatedGIFReader::GetFrameIndex(t, delays);
-
-	// 現在のフレーム番号
-	//Print << U"frameIndex: " << frameIndex;
 
 	textures[frameIndex].drawAt(Scene::Center());
 
@@ -307,10 +361,20 @@ void Scene2::draw() const
 
 	// 💬 テキストボックスを下中央に配置
 	constexpr double textBoxWidth = 200.0;
-	constexpr double yPos = 800.0;
+	constexpr double yPos = 594.0;
 	const double xPos = (Scene::Width() - textBoxWidth) / 2.0;
 	const Vec2 textBoxPos{ xPos, yPos };
-	SimpleGUI::TextBox(m_textState, textBoxPos, textBoxWidth);
+
+	// --- スケーリング係数 ---
+	const double scale = 4.0;
+
+	// --- マウス入力と描画に同じスケールを適用 ---
+	{
+		const Transformer2D transformer(Mat3x2::Scale(scale, Scene::Center()), TransformCursor::Yes);
+
+		// スケールが適用された範囲で描画＆マウス操作
+		SimpleGUI::TextBox(m_textState, textBoxPos, textBoxWidth);
+	}
 
 	// 🧮 残りお題カウンターを左上に表示
 	if (!talkLines.isEmpty())

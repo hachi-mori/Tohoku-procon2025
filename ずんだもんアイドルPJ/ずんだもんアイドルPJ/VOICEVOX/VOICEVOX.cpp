@@ -1389,4 +1389,100 @@ namespace VOICEVOX
 
 		return modified;
 	}
+
+	/// @brief 
+	/// @param vvprojPath 
+	/// @return 
+	Array<String> VOICEVOX::ExtractSongLyrics(const FilePath& vvprojPath)
+	{
+		Array<String> lyrics;
+
+		// JSON読み込み
+		const JSON src = JSON::Load(vvprojPath);
+		if (!src || !src.contains(U"song") || !src[U"song"].isObject()) {
+			Console << U"[ExtractSongLyrics] song セクションが無効";
+			return lyrics;
+		}
+
+		const JSON& song = src[U"song"];
+		if (!song.contains(U"tracks") || !song[U"tracks"].isObject()) {
+			Console << U"[ExtractSongLyrics] song.tracks が無効";
+			return lyrics;
+		}
+
+		// トラックを1つ取得
+		JSON track;
+		bool ok = false;
+
+		if (song.contains(U"trackOrder") && song[U"trackOrder"].isArray() && (song[U"trackOrder"].size() > 0)) {
+			const String key = song[U"trackOrder"][0].getOr<String>(U"");
+			if (!key.isEmpty() && song[U"tracks"].contains(key) && song[U"tracks"][key].isObject()) {
+				track = song[U"tracks"][key];
+				ok = true;
+			}
+		}
+		if (!ok) {
+			for (auto&& [__, tr] : song[U"tracks"]) {
+				if (tr.isObject()) { track = tr; ok = true; }
+				break;
+			}
+		}
+		if (!ok || !track.contains(U"notes") || !track[U"notes"].isArray()) {
+			Console << U"[ExtractSongLyrics] 有効な track / notes が見つかりません";
+			return lyrics;
+		}
+
+		// notesをposition昇順で並べ替え
+		Array<JSON> notes;
+		for (auto&& n : track[U"notes"].arrayView()) {
+			notes << n;
+		}
+		std::sort(notes.begin(), notes.end(), [](const JSON& a, const JSON& b) {
+			const int64 ap = a[U"position"].getOpt<int64>().value_or(0);
+			const int64 bp = b[U"position"].getOpt<int64>().value_or(0);
+			return ap < bp;
+		});
+
+		// 発音補正マップ
+		static const HashTable<String, String> kLyricCorrection = {
+			{ U"ワ", U"は" }, { U"ヲ", U"を" }, { U"ヘ", U"へ" },
+			{ U"ヴ", U"ブ" }, { U"シェ", U"しぇ" }, { U"ティ", U"てぃ" },
+			{ U"ディ", U"でぃ" }, { U"チェ", U"ちぇ" }, { U"ウィ", U"うぃ" },
+			{ U"クヮ", U"くぁ" }, { U"グヮ", U"ぐぁ" },
+		};
+
+		// 🎵 歌詞＋休符検出
+		int64 prevEnd = -1; // 前ノートの終了位置
+		for (auto&& n : notes)
+		{
+			const int64 pos = n[U"position"].getOpt<int64>().value_or(0);
+			const int64 dur = n[U"duration"].getOpt<int64>().value_or(0);
+
+			// gap = 休符の検出
+			if (prevEnd >= 0 && pos - prevEnd > 0)
+			{
+				lyrics << U"\n";
+			}
+
+			// 歌詞
+			if (auto lyr = n[U"lyric"].getOpt<String>())
+			{
+				if (!lyr->isEmpty())
+				{
+					// ✅ find() で対応
+					if (auto it = kLyricCorrection.find(*lyr); it != kLyricCorrection.end())
+					{
+						lyrics << it->second;
+					}
+					else
+					{
+						lyrics << *lyr;
+					}
+				}
+			}
+
+			prevEnd = pos + dur;
+		}
+		return lyrics;
+	}
 }

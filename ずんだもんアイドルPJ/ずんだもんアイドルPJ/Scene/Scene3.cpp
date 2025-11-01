@@ -14,7 +14,7 @@ void Scene3::initVVProjList()
 	{
 		if (FileSystem::Extension(path) == U"vvproj")
 		{
-			vvprojNames << FileSystem::RelativePath(path);
+			vvprojNames << FileSystem::BaseName(path);
 		}
 	}
 
@@ -27,7 +27,7 @@ void Scene3::update()
 {
 	if (listBoxStateVV.selectedItemIndex)
 	{
-		selectedVVProjPath = vvprojNames[*listBoxStateVV.selectedItemIndex];
+		selectedVVProjPath = U"Score/" + vvprojNames[*listBoxStateVV.selectedItemIndex] + U".vvproj";
 	}
 
 	if (ButtonAt(startButtonCenter, startButtonSize))

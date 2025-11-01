@@ -61,6 +61,8 @@ struct GameData
 	Array<SolvedTask> solvedTasks; // 成功した結果を保持
 
 	double finalRhymeMatchPercent = 0.0; // 👈 【追加】楽曲を通しての最終一致率
+
+	String fullLyrics; // 🎵 【追加】全ての替え歌をまとめた最終歌詞
 };
 
 using App = SceneManager<String, GameData>;

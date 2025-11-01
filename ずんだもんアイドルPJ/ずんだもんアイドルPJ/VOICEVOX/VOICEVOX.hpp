@@ -84,9 +84,11 @@ namespace VOICEVOX
 	// vvproj(talk) から発話テキストを抽出する
 	Array<String> ExtractTalkUtterances(const FilePath& vvprojPath);
 
-
+	// 
 	JSON ApplyParodyLyrics(
 		const JSON& vvprojOriginal,
 		const Array<SolvedTask>& solvedTasks
 	);
+
+	Array<String> ExtractSongLyrics(const FilePath& vvprojPath);
 }
