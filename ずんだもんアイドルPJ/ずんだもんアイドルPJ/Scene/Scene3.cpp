@@ -29,14 +29,18 @@ void Scene3::update()
 	{
 		selectedVVProjPath = vvprojNames[*listBoxStateVV.selectedItemIndex];
 	}
-	// 画面上にボタンを出して、
-	   // そのボタンが押されたフレームで true が返る
-	if (SimpleGUI::ButtonAt(U"スタート", Vec2{ Scene::Center().x, Scene::Center().y + 400 }, 100))
+
+	if (ButtonAt(startButtonCenter, startButtonSize))
 	{
-		getData().vvprojPath = *selectedVVProjPath;
-		//Print << U"選択された vvproj: " << *selectedVVProjPath;
-		// シーン切り替え
-		changeScene(U"Scene2",0.3s);
+		if (selectedVVProjPath)  // 中身があるか確認！
+		{
+			getData().vvprojPath = *selectedVVProjPath;
+			changeScene(U"Scene2", 0.3s);
+		}
+		else
+		{
+			Print << U"vvprojが選択されていません。";
+		}
 	}
 }
 
@@ -46,7 +50,7 @@ void Scene3::draw() const
 	logo.scaled(0.85).drawAt(Scene::Center().x,Scene::Center().y-70);
 	
 	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x+2, Scene::Center().y + 199}, 440, 238);
-	SimpleGUI::ButtonAt(U"スタート", Vec2{ Scene::Center().x, Scene::Center().y + 400 }, 100);
 
 	frame.scaled(1.1).drawAt(Scene::Center().x, Scene::Center().y + 70);
+	startButton.scaled(startButtonScale).drawAt(startButtonCenter);
 }
