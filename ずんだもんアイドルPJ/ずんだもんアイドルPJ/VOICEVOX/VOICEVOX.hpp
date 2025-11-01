@@ -91,4 +91,5 @@ namespace VOICEVOX
 	);
 
 	Array<String> ExtractSongLyrics(const FilePath& vvprojPath);
+	String GetEngineVersion(const URL& baseURL, const Duration timeout);
 }

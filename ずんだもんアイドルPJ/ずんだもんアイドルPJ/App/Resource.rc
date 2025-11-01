@@ -1,11 +1,11 @@
-# include <Siv3D/Windows/Resource.hpp>
+#include<Siv3D/Windows/Resource.hpp>
 
 //////////////////////////////////////////////////////
 //
-//	Siv3D Engine Resources (DO NOT REMOVE)
+//	Siv3DEngineResources(DONOTREMOVE)
 //
 //////////////////////////////////////////////////////
-DefineResource(100, ICON, icon.ico)
+DefineResource(100,ICON,icon.ico)
 
 //
 //	Shaders
@@ -75,7 +75,7 @@ Resource(engine/shader/glsl/sky.frag)
 Resource(engine/font/min/siv3d-min.woff)
 
 //
-//	Box-shadow Textures
+//	Box-shadowTextures
 //
 Resource(engine/texture/box-shadow/256.png)
 Resource(engine/texture/box-shadow/128.png)
@@ -86,7 +86,7 @@ Resource(engine/texture/box-shadow/8.png)
 
 //////////////////////////////////////////////////////
 //
-//	Siv3D Engine Optional Resources (Can be removed if not required)
+//	Siv3DEngineOptionalResources(Canberemovedifnotrequired)
 //
 //////////////////////////////////////////////////////
 
@@ -104,7 +104,7 @@ Resource(engine/font/noto-cjk/NotoSansCJK-Regular.ttc.zstdcmp)
 //Resource(engine/font/noto-cjk/NotoSansJP-Regular.otf.zstdcmp)
 
 //
-//	Emoji Fonts
+//	EmojiFonts
 //
 Resource(engine/font/noto-emoji/NotoColorEmoji.ttf.zstdcmp)
 Resource(engine/font/noto-emoji/NotoEmoji-Regular.ttf.zstdcmp)
@@ -117,32 +117,56 @@ Resource(engine/font/fontawesome/fontawesome-solid.otf.zstdcmp)
 Resource(engine/font/materialdesignicons/materialdesignicons-webfont.ttf.zstdcmp)
 
 //
-//	Sound Font
+//	SoundFont
 //
 Resource(engine/soundfont/GMGSx.sf2.zstdcmp)
 
 //////////////////////////////////////////////////////
 //
-//	Siv3D App Resources (Your application resources here)
+//	Siv3DAppResources(Yourapplicationresourceshere)
 //
 //////////////////////////////////////////////////////
 
+Resource(Texture/assets/story.png)
+Resource(Texture/assets/title_background.png)
+Resource(Texture/assets/title_frame.png)
+Resource(Texture/assets/title_frame_w_trans.png)
+Resource(Texture/assets/title_logo.png)
+Resource(Texture/assets/zunda_kakusei.png)
+Resource(Texture/assets/zunda_singing.gif)
+Resource(Texture/assets/zunda_sippai.png)
+Resource(Texture/assets/credit.png)
+Resource(Texture/assets/game_background2.gif)
+Resource(Texture/assets/game_frame.png)
+Resource(Texture/assets/howtoplay.png)
+Resource(Texture/assets/loding_background.gif)
+Resource(Texture/assets/result_background.png)
+Resource(Texture/assets/result_cloudy.gif)
+Resource(Texture/assets/result_frame.png)
+Resource(Texture/assets/result_rainy.gif)
+Resource(Texture/assets/result_sunny.gif)
+Resource(Texture/assets/button/title.png)
+Resource(Texture/assets/button/credit.png)
+Resource(Texture/assets/button/howtoplay.png)
+Resource(Texture/assets/button/restart.png)
+Resource(Texture/assets/button/start.png)
+Resource(Texture/assets/button/story.png)
+Resource(Texture/Futehodo-MaruGothic.ttf)
 
-
-/* examples 
+/*examples
 
 	//
-	// Define your resource path inside `Resource()` macro.
-	// No double quotation marks and white spaces may appear.
+	//Defineyourresourcepathinside`Resource()`macro.
+	//Nodoublequotationmarksandwhitespacesmayappear.
 	//
-	Resource(example/siv3d-kun.png)		// ok
-	Resource(example/windmill.png)		// ok
-	Resource(assets/a b c.txt)			// error: contains white spaces
-	Resource("example/windmill.png")	// error: contains double quotation marks
+	Resource(example/siv3d-kun.png)		//ok
+	Resource(example/windmill.png)		//ok
+	Resource(assets/abc.txt)			//error:containswhitespaces
+	Resource("example/windmill.png")	//error:containsdoublequotationmarks
 
 	//
-	// If your file contains a white space, define the identifier without using Resource() macro.
+	//Ifyourfilecontainsawhitespace,definetheidentifierwithoutusingResource()macro.
 	//
-	MYIDENTIFIER_1 FILE "assets/a b c.txt"
-	MYIDENTIFIER_2 FILE "level 1/map.dat"
+	MYIDENTIFIER_1FILE"assets/abc.txt"
+	MYIDENTIFIER_2FILE"level1/map.dat"
 */

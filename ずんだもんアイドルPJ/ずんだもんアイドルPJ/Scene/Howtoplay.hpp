@@ -13,5 +13,5 @@ public:
 	void draw() const override;
 
 private:
-	Texture background{ U"Texture/assets/howtoplay.png" };
+	Texture background{ Resource(U"Texture/assets/howtoplay.png") };
 };

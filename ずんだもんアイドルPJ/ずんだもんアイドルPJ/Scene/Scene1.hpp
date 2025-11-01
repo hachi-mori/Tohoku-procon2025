@@ -34,12 +34,12 @@ private:
 	mutable  String m_baseName;
 
 	// GIF アニメーション画像を開く
-	const AnimatedGIFReader gif{ U"Texture/assets/loding_background.gif" };
+	const AnimatedGIFReader gif{ Resource(U"Texture/assets/loding_background.gif") };
 	Array<Image> images;
 	Array<int32> delays;
 	Array<Texture> textures;
 
-	const FilePath fontpath = U"Texture/Futehodo-MaruGothic.ttf";
+	const FilePath fontpath = Resource(U"Texture/Futehodo-MaruGothic.ttf" );
 	Font m_font{ FontMethod::MSDF, 60 , fontpath };
 	Color kogetyaColor = { 134,79,9 };
 };

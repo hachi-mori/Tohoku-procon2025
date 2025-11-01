@@ -1448,7 +1448,7 @@ namespace VOICEVOX
 			{ U"ワ", U"は" }, { U"ヲ", U"を" }, { U"ヘ", U"へ" },
 			{ U"ヴ", U"ブ" }, { U"シェ", U"しぇ" }, { U"ティ", U"てぃ" },
 			{ U"ディ", U"でぃ" }, { U"チェ", U"ちぇ" }, { U"ウィ", U"うぃ" },
-			{ U"クヮ", U"くぁ" }, { U"グヮ", U"ぐぁ" },
+			{ U"クヮ", U"くぁ" }, { U"グヮ", U"ぐぁ" },{  U"オ", U"う" }
 		};
 
 		// 🎵 歌詞＋休符検出
@@ -1484,5 +1484,30 @@ namespace VOICEVOX
 			prevEnd = pos + dur;
 		}
 		return lyrics;
+	}
+
+	String GetEngineVersion(const URL& baseURL, const Duration timeout /*= 2s*/)
+	{
+		const URL url = U"{}/version"_fmt(baseURL);
+
+		AsyncHTTPTask task = SimpleHTTP::GetAsync(url, {});
+		Stopwatch sw{ StartImmediately::Yes };
+
+		while (!task.isReady())
+		{
+			if (timeout <= sw) { task.cancel(); return U"(接続エラー)"; }
+			System::Sleep(1ms);
+		}
+		if (!task.getResponse().isOK())
+		{
+			return U"(接続エラー)";
+		}
+
+		const JSON json = task.getAsJSON();
+		if (json.isString())
+		{
+			return json.get<String>();        // 例: "0.25.0"
+		}
+		return U"(接続エラー)";
 	}
 }

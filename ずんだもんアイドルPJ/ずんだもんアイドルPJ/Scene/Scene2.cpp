@@ -33,6 +33,8 @@ Scene2::Scene2(const InitData& init)
 
 	m_timer.start(); // タイマー開始
 
+	m_countdownTimer.start();  // カウントダウン開始
+	m_showCountdown = true;    // カウントダウンモードON
 }
 
 // Scene2::splitSyllables (音節分割関数)
@@ -127,6 +129,20 @@ String Scene2::replaceChoonWithVowel(const String& text) const
 
 void Scene2::update()
 {
+	if (m_showCountdown)
+	{
+		double elapsed = m_countdownTimer.s();
+
+		if (elapsed >= m_countdownDuration)
+		{
+			// カウントダウン終了
+			m_showCountdown = false;
+			m_timer.restart(); // ゲームタイマー開始
+		}
+
+		return; // カウントダウン中は何もしない
+	}
+
 	// talkLinesが空なら何もしない
 	if (talkLines.isEmpty())
 	{
@@ -342,6 +358,25 @@ void Scene2::draw() const
 {
 	ClearPrint();
 
+	// === カウントダウン表示 ===
+	if (m_showCountdown)
+	{
+		double elapsed = m_countdownTimer.s();
+		int remaining = static_cast<int>(Math::Ceil(m_countdownDuration - elapsed));
+
+		String countdownText;
+		if (remaining > 0)
+			countdownText = Format(remaining);
+		else
+			countdownText = U"START!";
+
+		background.scaled(1.05).drawAt(Scene::Center());
+		m_font(countdownText).drawAt(Scene::Center().movedBy(0, 80), kogetyaColor);
+		m_font(getData().songTitle).drawAt(70, Scene::Center().movedBy(0, -120), kogetyaColor);
+
+		return; // カウントダウン中は他を描かない
+	}
+
 	// アニメーションの経過時間
 	double t = Scene::Time();
 
@@ -350,7 +385,7 @@ void Scene2::draw() const
 
 	textures[frameIndex].drawAt(Scene::Center());
 
-	background.draw();
+	frame.draw();
 
 	// 🎯 お題を中央に大きく描画
 	if (!m_currentTopic.isEmpty())
@@ -390,4 +425,20 @@ void Scene2::draw() const
 	const String timeText = U"{}"_fmt(remaining);
 	const Vec2 pos{ Scene::Width() - 155, 145 };
 	m_font(timeText).drawAt(97, pos, (remaining <= 3 ? Palette::Red : kogetyaColor));
+
+	// 🔁 直前のお題と回答・スコアを表示（2問目以降のみ）
+	if (currentIndex > 0)
+	{
+		const auto& prevTask = getData().solvedTasks[currentIndex - 1];
+		const double yBase = 520;
+
+		// 前のお題
+		result_font(U"　　　前のお題：" + prevTask.phrase).draw(22, Vec2{ 40, yBase }, Palette::White);
+
+		// ユーザーの回答
+		result_font(U"　あなたの回答：" + prevTask.userInput).draw(22, Vec2{ 40, yBase + 30 }, Palette::Skyblue);
+
+		// スコア（百分率で表示）
+		result_font(U"韻（いん）の数：" + Format(prevTask.matchesCount) + U"こ").draw(22, Vec2{ 40, yBase + 60 }, Palette::Yellow);
+	}
 }
