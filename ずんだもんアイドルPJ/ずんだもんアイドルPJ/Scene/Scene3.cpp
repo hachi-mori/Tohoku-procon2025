@@ -50,17 +50,23 @@ void Scene3::update()
 	{
 		changeScene(U"Howtoplay", 0.3s);
 	}
+	if (ButtonAt(creditButtonCenter, creditButtonSize))
+	{
+		changeScene(U"Credit", 0.3s);
+	}
 }
 
 void Scene3::draw() const
 {
 	background.draw();
-	logo.scaled(0.85).drawAt(Scene::Center().x,Scene::Center().y-70);
+	logo.scaled(0.81).drawAt(Scene::Center().x,Scene::Center().y-50);
 	
-	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x+2, Scene::Center().y + 199}, 440, 238);
+	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x+2, Scene::Center().y + 209}, 440, 238);
 
-	frame.scaled(1.1).drawAt(Scene::Center().x, Scene::Center().y + 70);
+	frame.scaled(1.1).drawAt(Scene::Center().x, Scene::Center().y + 80);
+
 	startButton.scaled(startButtonScale).drawAt(startButtonCenter);
 	storyButton.scaled(storyButtonScale).drawAt(storyButtonCenter);
 	howtoplayButton.scaled(howtoplayButtonScale).drawAt(howtoplayButtonCenter);
+	creditButton.scaled(creditButtonScale).drawAt(creditButtonCenter);
 }
