@@ -16,5 +16,6 @@ private:
 	mutable ListBoxState listBoxStateVV;
 	Optional<FilePath> selectedVVProjPath;
 	void initVVProjList();
-	Texture background{ U"Texture/assets/game_background.gif" };
+	Texture background{ U"Texture/assets/title_background.png" };
+	Texture logo{ U"Texture/assets/title_logo.png" };
 };

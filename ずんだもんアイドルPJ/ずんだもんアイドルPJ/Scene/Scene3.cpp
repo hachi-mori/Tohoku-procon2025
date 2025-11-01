@@ -43,6 +43,7 @@ void Scene3::update()
 void Scene3::draw() const
 {
 	background.draw();
+	logo.scaled(0.75).drawAt(Scene::Center().x,Scene::Center().y-60);
 
 	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x, Scene::Center().y + 200}, 400, 200);
 	SimpleGUI::ButtonAt(U"スタート", Vec2{ Scene::Center().x, Scene::Center().y + 400 }, 100);
