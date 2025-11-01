@@ -19,8 +19,14 @@ private:
 	Texture background{ U"Texture/assets/title_background.png" };
 	Texture logo{ U"Texture/assets/title_logo.png" };
 	Texture frame{ U"Texture/assets/title_frame_w_trans.png" };
+
 	Texture startButton{ U"Texture/assets/button/start.png" };
 	double startButtonScale = 0.7;
 	Vec2 startButtonCenter = Scene::Center().movedBy(0, 400);
-	SizeF startButtonSize = startButton.size() * startButtonScale;  // ✅ 画像スケールからサイズ取得
+	SizeF startButtonSize = startButton.size() * (startButtonScale - 0.05);	// 画像スケールから少しだけ小さくする
+
+	Texture storyButton{ U"Texture/assets/button/story.png" };
+	double storyButtonScale = 0.7;
+	Vec2 storyButtonCenter = Scene::Center().movedBy(-450, 400);
+	SizeF storyButtonSize = storyButton.size() * (storyButtonScale - 0.05);  // 画像スケールから少しだけ小さくする
 };
