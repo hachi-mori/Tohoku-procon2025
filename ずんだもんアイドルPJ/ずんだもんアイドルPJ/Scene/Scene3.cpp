@@ -19,6 +19,8 @@ void Scene3::initVVProjList()
 	}
 
 	listBoxStateVV = ListBoxState{ vvprojNames };
+
+
 }
 
 void Scene3::update()
@@ -29,10 +31,10 @@ void Scene3::update()
 	}
 	// 画面上にボタンを出して、
 	   // そのボタンが押されたフレームで true が返る
-	if (SimpleGUI::Button(U"スタート", startButtonPos))
+	if (SimpleGUI::ButtonAt(U"スタート", Vec2{ Scene::Center().x, Scene::Center().y + 400 }, 100))
 	{
 		getData().vvprojPath = *selectedVVProjPath;
-		Print << U"選択された vvproj: " << *selectedVVProjPath;
+		//Print << U"選択された vvproj: " << *selectedVVProjPath;
 		// シーン切り替え
 		changeScene(U"Scene2",0.3s);
 	}
@@ -40,12 +42,8 @@ void Scene3::update()
 
 void Scene3::draw() const
 {
-	SimpleGUI::ListBox(listBoxStateVV, Vec2{ 400, 250 }, 300, 400);
+	background.draw();
 
-	if (selectedVVProjPath)
-	{
-		FontAsset(U"MainFont")(U"選択中: {}"_fmt(*selectedVVProjPath))
-			.draw(30, Vec2{ 400, 700 }, Palette::White);
-	}
-
+	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x, Scene::Center().y + 200}, 400, 200);
+	SimpleGUI::ButtonAt(U"スタート", Vec2{ Scene::Center().x, Scene::Center().y + 400 }, 100);
 }

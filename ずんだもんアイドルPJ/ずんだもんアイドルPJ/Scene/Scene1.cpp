@@ -3,294 +3,128 @@
 Scene1::Scene1(const InitData& init)
 	: IScene{ init }
 {
-	Print << U"===== Scene3: 受け取った結果 =====";
+	// GIFに関する処理
+	// 各フレームの画像と、次のフレームへのディレイ（ミリ秒）をロードする
+	gif.read(images, delays);
+
+	// 各フレームの Image から Texure を作成する
+	textures = images.map([](const Image& image) { return Texture{ image }; });
+
+	// 画像データはもう使わないため、消去してメモリ消費を減らす
+	images.clear();
+
+	m_timer.start(); // タイマー開始
+
+	/*
+	Console << U"===== Scene3: 受け取った結果 =====";
 
 	// 共有データを直接参照して表示
-	    for (const auto& t : getData().solvedTasks)
-    {
-        Print << U"お題：" << t.phrase;
-        Print << U"  音節リスト：" << t.syllables; // 例: [え, ぶ, り, で, い]
-        Print << U"入力：" << t.userInput;
-        Print << U"  入力の音節リスト：" << t.userSyllables;
-    }
-
-
-	// ==== VOICEVOX スピーカー情報の初期化 ====
-	for (const auto& spk : VOICEVOX::GetSingers(baseURL))
+	for (const auto& t : getData().solvedTasks)
 	{
-		if (!spk.styles.isEmpty())
-		{
-			const auto& st = spk.styles[0]; // 最初のスタイルだけ使用
-			SingerLabels << U"{}（{}）"_fmt(spk.name, st.name);
-			SingerNames << spk.name;
-			StyleNames << st.name;
-			SingerIDs << st.id;
-		}
+		Console << U"お題：" << t.phrase;
+		Console << U"  音節リスト：" << t.syllables; // 例: [え, ぶ, り, で, い]
+		Console << U"入力：" << t.userInput;
+		Console << U"  入力の音節リスト：" << t.userSyllables;
 	}
+	*/
 
-	// ListBoxState の初期化（Speakerリストを使って作り直す）
-	SingerUI.clear();
-	for (size_t i = 0; i < kMaxCharacters; ++i)
-	{
-		SingerUI << ListBoxState{ SingerLabels };
-	}
-	prevSel.assign(kMaxCharacters, none);
+	const JSON originalVV = JSON::Load(getData().vvprojPath);
+	const String base = FileSystem::BaseName(getData().vvprojPath);
+	m_baseName = base;
+	const String singerName = U"ずんだもん";
+	getData().SingingNames << singerName;
+	const int i = 0; // ずんだもん1人のときのインデックス
+	const int32  spkID = 3003;	// ずんだもん（ノーマル）
+	const int32  talkSpkID = spkID - 3000;
 
-	// キャラクタ画像を初期化
-	characterTex.clear();
-	for (size_t i = 0; i < kMaxCharacters; ++i)
-	{
-		characterTex << Texture{ U"Texture/Character/VOICEVOX/ずんだもん.png" };
-	}
+	// 歌詞差し替えした vvproj を作って保存
+	JSON parodyVV = VOICEVOX::ApplyParodyLyrics(
+		originalVV,
+		getData().solvedTasks
+	);
 
-	// 音声関係も空で初期化
-	songAudio.assign(kMaxCharacters, Audio{});
-	talkAudio.assign(kMaxCharacters, Audio{});
-	talkStartSecs.assign(kMaxCharacters, 0.0);
-	talkPending.assign(kMaxCharacters, false);
+	// 一時vvproj
+	FilePath vvTmp = U"tmp/tmp_modified_" + base + U"_track" + Format(i + 1) + U".vvproj";
+	parodyVV.save(vvTmp);
 
-	// 簡易フェードイン演出（Main(3) の簡易演出部分）
-	for (double i = 0.0; i < 1.0; i += 0.1)
-	{
-		song_title.draw(Arg::center = Scene::Center(), ColorF{ 1.0, i * 0.5 });
-	}
+	// ③ スコアJSONへの変換は、元vvprojではなくvvTmpを使う
+	FilePath score = U"tmp/tmp_" + base + U"_track" + Format(i + 1) + U".json";
+	VOICEVOX::ConvertVVProjToScoreJSON(vvTmp, score, i);
 
-	vvprojPath = getData().vvprojPath;
+	FilePath songwav = U"Voice/" + base + U"-ずんだもん（ノーマル）_track" + Format(i + 1) + U".wav";
 
-	if (vvprojPath)
-	{
-		charCount = Min(VOICEVOX::GetVVProjTrackCount(*vvprojPath), kMaxCharacters);
-	}
+	int keyShift = VOICEVOX::GetKeyAdjustment(U"ずんだもん", U"ノーマル");
+
+	// あとで再生に使うため、パスを記録しておく
+	m_songWavPath = songwav;
+	m_scorePath = score;
+	m_baseName = base;
+
+	// ✅ 非同期タスクとして合成を実行
+	m_isLoading = true;
+	m_timer.restart();
+
+	m_task = Async([=]() {
+		return VOICEVOX::SynthesizeFromJSONFileWrapperSplit(score, songwav, spkID, baseURL, 2500, keyShift);
+	});
 }
 
 void Scene1::update()
 {
-	//------------------------------------
-	// 🎨 キャラ配置の計算
-	//------------------------------------
-	Array<Vec2> centers;
-	const double step = static_cast<double>(Scene::Width()) / (charCount + 1);
-
-	for (size_t i = 0; i < charCount; ++i)
+	// 非同期処理が終わったか？
+	if (m_isLoading && m_task.isReady())
 	{
-		centers << Vec2{ step * (i + 1), kCenterY };
-	}
+		const bool success = m_task.get(); // 結果を取得
+		m_isLoading = false;
 
-	//------------------------------------
-	// 🧍 キャラ描画＋リストボックス
-	//------------------------------------
-	Array<size_t> singingIdx;
-	size_t singingNow = 0;
-
-	for (size_t i = 0; i < charCount; ++i)
-	{
-		// 歌唱アニメ判定
-		double scale = 0.8;
-		double alpha = 0.5;
-
-		const double eSong = analyzeEnergy(songAudio[i]);
-		const double eTalk = analyzeEnergy(talkAudio[i]);
-		const double eMax = Max(eSong, eTalk);
-
-		if (eMax > kSingingThreshold)
+		if (success)
 		{
-			++singingNow;
-			singingIdx << i;
-			scale = 0.9;
-			alpha = 1.0;
+			// 🎵 音声と伴奏をロード
+			Audio songAudio{ m_songWavPath, Loop::Yes };
+			FileSystem::Remove(m_scorePath);
+			Audio inst{ U"Inst/" + m_baseName + U".mp3", Loop::Yes };
+
+			//Console << U"「" + m_baseName + U"」の再生準備が完了しました。";
+
+			// ✅ 共有データへ保存
+			getData().charCount = 1;
+			getData().SingerNames = { U"ずんだもん" };
+			getData().StyleNames = { U"ノーマル" };
+			getData().songAudio = { songAudio };
+			getData().instAudio = inst;
+			getData().vvprojPath = getData().vvprojPath;
+			getData().songTitle = FileSystem::BaseName(getData().vvprojPath);
+			getData().readyToPlay = true;
 		}
 
-		characterTex[i].scaled(scale).drawAt(centers[i], ColorF(1.0, alpha));
-
-		SimpleGUI::ListBox(SingerUI[i], centers[i] + kListOff, 300, 220);
-
-		// 選択が変わったらキャラ画像切替
-		if (SingerUI[i].selectedItemIndex != prevSel[i])
-		{
-			prevSel[i] = SingerUI[i].selectedItemIndex;
-			const String selLabel = SingerLabels[SingerUI[i].selectedItemIndex.value()];
-			const FilePath charFolder = U"Texture/Character/VOICEVOX/";
-			const auto files = FileSystem::DirectoryContents(charFolder, Recursive::No);
-
-			Optional<FilePath> matchedTex;
-			for (const auto& f : files)
-			{
-				const String fileName = FileSystem::BaseName(f);
-				if (selLabel.starts_with(fileName))
-				{
-					matchedTex = f;
-					break;
-				}
-			}
-
-			FilePath tex = matchedTex.value_or(charFolder + U"ずんだもん.png");
-			characterTex[i] = Texture{ tex };
-		}
-
-		// 音量とパンの表示
-		double volume = songAudio[i].getVolume();
-		font(U"Vol: {:.2f}"_fmt(volume)).drawAt(centers[i] + Vec2{ 0, 150 }, ColorF{ 1.0 });
-
-		double pan = songAudio[i].getPan();
-		font(U"Pan: {:+.2f}"_fmt(pan)).drawAt(centers[i] + Vec2{ 0, 110 }, ColorF{ 1.0 });
+		//Console << U"音声合成が完了しました";
+		changeScene(U"Result", 0.3s);
 	}
-
-	//------------------------------------
-	// 🎶 音声合成ボタン
-	//------------------------------------
-	if (SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 880 }, unspecified, vvprojPath.has_value()))
-	{
-		const String base = FileSystem::BaseName(*vvprojPath);
-		getData().SingingNames.clear();
-
-		// ① 元vvprojを一回読み込む
-		const JSON originalVV = JSON::Load(*vvprojPath);
-
-		for (size_t i = 0; i < charCount; ++i)
-		{
-			const uint64 selIdx = SingerUI[i].selectedItemIndex.value_or(0);
-			const String singerName = SingerNames[selIdx];
-			getData().SingingNames << singerName;
-
-			const int32  spkID = SingerIDs[selIdx];
-			const int32  talkSpkID = spkID - 3000;
-
-			// ② このトラック用に歌詞差し替えした vvproj を作って保存
-			JSON parodyVV = VOICEVOX::ApplyParodyLyrics(
-				originalVV,
-				getData().solvedTasks
-			);
-
-			// 一時vvproj
-			FilePath vvTmp = U"tmp/tmp_modified_" + base + U"_track" + Format(i + 1) + U".vvproj";
-			parodyVV.save(vvTmp);
-
-			// ③ スコアJSONへの変換は、元vvprojではなくvvTmpを使う
-			FilePath score = U"tmp/tmp_" + base + U"_track" + Format(i + 1) + U".json";
-			if (!VOICEVOX::ConvertVVProjToScoreJSON(vvTmp, score, i))
-			{
-				continue;
-			}
-
-			FilePath songwav = U"Voice/" + base + U"-" + SingerLabels[selIdx] + U"_track" + Format(i + 1) + U".wav";
-			FilePath talkwav = U"Voice/" + base + U"-" + SingerLabels[selIdx] + U"_talk_track" + Format(i + 1) + U".wav";
-
-			FilePath talkOut = U"tmp/tmp_talk_" + base + U"_track" + Format(i + 1) + U".json";
-			double talkStartSec = 0.0;
-			const bool talkOk = VOICEVOX::ConvertVVProjToTalkQueryJSON(
-				baseURL, *vvprojPath, talkOut, talkSpkID, &talkStartSec, i + charCount);
-
-			talkStartSecs[i] = Max(0.0, talkStartSec - 0.155);
-
-			int keyShift = VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]);
-			if (VOICEVOX::SynthesizeFromJSONFileWrapperSplit(score, songwav, spkID, baseURL, 2500, keyShift))
-			{
-				songAudio[i] = Audio{ songwav, Loop::Yes };
-				FileSystem::Remove(score);
-			}
-
-			if (talkOk)
-			{
-				const FilePath talkPrefix = U"Voice/" + base + U"-" + SingerLabels[selIdx] + U"_talk_track" + Format(i + 1);
-				const FilePath joinedTalk = talkPrefix + U"_joined.wav";
-
-				if (VOICEVOX::SynthesizeFromVVProjWrapperSplitTalkJoin(
-					baseURL, *vvprojPath, talkPrefix, joinedTalk, talkSpkID, i + charCount, 3750))
-				{
-					if (FileSystem::Exists(joinedTalk))
-					{
-						talkAudio[i] = Audio{ joinedTalk };
-					}
-				}
-			}
-
-			Console << U"{}（{}） → Shift:{}"_fmt(SingerNames[selIdx], StyleNames[selIdx],
-				VOICEVOX::GetKeyAdjustment(SingerNames[selIdx], StyleNames[selIdx]));
-		}
-
-		audio_inst = Audio{ U"Inst/" + base + U".mp3", Loop::Yes };
-		Console << U"「" + base + U"」の再生準備が完了しました。\t";
-	}
-
-	//------------------------------------
-	// ▶️ 再生ボタン
-	//------------------------------------
-	bool playable = std::any_of(songAudio.begin(), songAudio.begin() + charCount,
-		[](const Audio& a) { return !a.isEmpty(); });
-
-	if (SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 }, unspecified, playable))
-	{
-		changeScene(U"Scene2");
-		// 共有データへの保存
-		getData().charCount = charCount;
-		getData().SingerNames = SingerNames;
-		getData().StyleNames = StyleNames;
-		getData().characterTex = characterTex;
-		getData().songAudio = songAudio;
-		getData().talkAudio = talkAudio;
-		getData().instAudio = audio_inst;
-		getData().vvprojPath = *vvprojPath;
-		getData().songTitle = FileSystem::BaseName(*vvprojPath);
-		getData().talkStartSecs = talkStartSecs;
-		getData().talkPending = talkPending;
-		getData().readyToPlay = true;
-
-		waitingToPlay = true;
-		waitTimer = 0.0;
-	}
-
 }
 
 void Scene1::draw() const
 {
-	// ① 背景（最初に描画）
-	background.draw();
 
-	// ③ キャラクター立ち絵の描画
-	const double step = static_cast<double>(Scene::Width()) / (charCount + 1);
-	Array<Vec2> centers;
+	//GIFアニメーションの描画
+	ClearPrint();
 
-	for (size_t i = 0; i < charCount; ++i)
-	{
-		centers << Vec2{ step * (i + 1), kCenterY };
-	}
+	// フレーム数
 
-	for (size_t i = 0; i < charCount; ++i)
-	{
-		// キャラ画像
-		characterTex[i].drawAt(centers[i], ColorF{ 1.0 });
-	}
+	//Print << textures.size() << U" frames";
 
-	// ⑤ 各キャラごとの ListBox（UIの一部）
-	for (size_t i = 0; i < charCount; ++i)
-	{
-		SimpleGUI::ListBox(SingerUI[i], centers[i] + kListOff, 300, 220);
-	}
+	// 各フレームのディレイ（ミリ秒）一覧
+	//Print << U"delays: " << delays;
 
-	//  ⑥ GUI部品（最前面・右側操作系）
-	//SimpleGUI::Button(U"🎵 入力ファイルを選択", Vec2{ 1500, 830 });
-	SimpleGUI::Button(U"🎵 音声合成", Vec2{ 1500, 880 }, unspecified, vvprojPath.has_value());
-	SimpleGUI::Button(U"▶️再生", Vec2{ 1500, 930 });
+	// アニメーションの経過時間
+	double t = Scene::Time();
 
-}
+	// 経過時間と各フレームのディレイに基づいて、何番目のフレームを描けばよいかを計算する
+	size_t frameIndex = AnimatedGIFReader::GetFrameIndex(t, delays);
 
+	// 現在のフレーム番号
+	//Print << U"frameIndex: " << frameIndex;
 
-double Scene1::analyzeEnergy(const Audio& a) const
-{
-	if (!a.isPlaying())
-	{
-		return 0.0;
-	}
+	textures[frameIndex].drawAt(Scene::Center());
 
-	FFTResult fft;
-	FFT::Analyze(fft, a);
-
-	if (fft.buffer.empty())
-	{
-		return 0.0;
-	}
-
-	double energy = std::accumulate(fft.buffer.begin(), fft.buffer.end(), 0.0);
-	energy /= fft.buffer.size();
-	return energy;
+	m_font(U"ずんだもん が おうた を\n\nれんしゅう しているよ").drawAt(60, Scene::Center().x,Scene::Center().y-200, kogetyaColor);
 }

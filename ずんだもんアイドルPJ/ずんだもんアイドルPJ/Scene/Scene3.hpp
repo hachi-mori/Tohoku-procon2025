@@ -16,7 +16,5 @@ private:
 	mutable ListBoxState listBoxStateVV;
 	Optional<FilePath> selectedVVProjPath;
 	void initVVProjList();
-
-	// ボタンの位置
-	Vec2 startButtonPos{ Scene::Center()};
+	Texture background{ U"Texture/assets/game_background.gif" };
 };

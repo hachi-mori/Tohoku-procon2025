@@ -380,7 +380,7 @@ namespace VOICEVOX
 			return false;
 		}
 
-		Console(U"ファイルが保存されました: " + savePath);
+		//Console(U"ファイルが保存されました: " + savePath);
 		return true;
 	}
 
@@ -563,7 +563,7 @@ namespace VOICEVOX
 			FileSystem::Remove(U"tmp/tmp_part_" + Format(i) + U".wav");
 		}
 
-		Console(U"分割合成＆連結が完了: " + outputPath);
+		//Console(U"分割合成＆連結が完了: " + outputPath);
 		return true;
 	}
 
