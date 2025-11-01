@@ -29,4 +29,9 @@ private:
 	double storyButtonScale = 0.7;
 	Vec2 storyButtonCenter = Scene::Center().movedBy(-450, 400);
 	SizeF storyButtonSize = storyButton.size() * (storyButtonScale - 0.05);  // 画像スケールから少しだけ小さくする
+
+	Texture howtoplayButton{ U"Texture/assets/button/howtoplay.png" };
+	double howtoplayButtonScale = 0.7;
+	Vec2 howtoplayButtonCenter = Scene::Center().movedBy(450, 400);
+	SizeF howtoplayButtonSize = howtoplayButton.size() * (howtoplayButtonScale - 0.05);  // 画像スケールから少しだけ小さくする
 };

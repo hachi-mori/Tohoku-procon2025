@@ -4,6 +4,7 @@
 # include "Scene/Scene3.hpp"
 # include "Scene/Result.hpp"
 # include "Scene/Story.hpp"
+# include "Scene/Howtoplay.hpp"
 
 void Main()
 {
@@ -19,6 +20,7 @@ void Main()
 	manager.add<Scene1>(U"Scene1"); // ライブシーン
 	manager.add<Result>(U"Result"); // ライブシーン
 	manager.add<Story>(U"Story"); // ストーリー
+	manager.add<Howtoplay>(U"Howtoplay"); // あそびかた
 
 	while (System::Update())
 	{
@@ -28,6 +30,7 @@ void Main()
 		if (Key3.down() || KeyNum3.down()) { manager.changeScene(U"Scene3"); }
 		if (Key4.down() || KeyNum4.down()) { manager.changeScene(U"Result"); }
 		if (Key5.down() || KeyNum5.down()) { manager.changeScene(U"Story"); }
+		if (Key6.down() || KeyNum6.down()) { manager.changeScene(U"Howtoplay"); }
 
 		if (not manager.update())
 		{

@@ -46,6 +46,10 @@ void Scene3::update()
 	{
 		changeScene(U"Story", 0.3s);
 	}
+	if (ButtonAt(howtoplayButtonCenter, howtoplayButtonSize))
+	{
+		changeScene(U"Howtoplay", 0.3s);
+	}
 }
 
 void Scene3::draw() const
@@ -58,4 +62,5 @@ void Scene3::draw() const
 	frame.scaled(1.1).drawAt(Scene::Center().x, Scene::Center().y + 70);
 	startButton.scaled(startButtonScale).drawAt(startButtonCenter);
 	storyButton.scaled(storyButtonScale).drawAt(storyButtonCenter);
+	howtoplayButton.scaled(howtoplayButtonScale).drawAt(howtoplayButtonCenter);
 }

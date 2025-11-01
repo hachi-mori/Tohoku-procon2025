@@ -1,12 +1,12 @@
-﻿# include "Story.hpp"
+﻿# include "Howtoplay.hpp"
 
-Story::Story(const InitData& init)
+Howtoplay::Howtoplay(const InitData& init)
 	: IScene{ init }
 {
 	
 }
 
-void Story::update()
+void Howtoplay::update()
 {
 	if (MouseL.down()) {
 		changeScene(U"Scene3", 0.3s);
@@ -14,7 +14,7 @@ void Story::update()
 	Cursor::RequestStyle(CursorStyle::Hand);
 }
 
-void Story::draw() const
+void Howtoplay::draw() const
 {
 	background.draw();
 }
