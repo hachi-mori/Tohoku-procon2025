@@ -5,46 +5,56 @@ Scene3::Scene3(const InitData& init)
 {
 	initVVProjList();
 
-	const String version = VOICEVOX::GetEngineVersion(baseURL, 2s);
-	// Print << U"🎤 VOICEVOX Engine Version: " << version;
-	// VOICEVOX の接続状態とバージョンを確認
-	if (version == U"(接続エラー)")
-	{
-		const String msg = U"ゲーム「シングリンク」のすべての機能を利用するには、"
-			U"アプリ「VOICEVOX（無料）」をインストールし、起動した状態でゲームを起動する必要があります。\n\n"
-			U"VOICEVOXを使用しない簡易版ゲーム「シングリンク（簡易モード）」で遊びますか？\n"
-			U"※ 簡易モードではゲーム体験が著しく制限されます。";
-
-		if (System::MessageBoxYesNo(msg) == MessageBoxResult::No)
+	if (not getData().voicevoxCheckedFlag) {
+		const String version = VOICEVOX::GetEngineVersion(baseURL, 2s);
+		// Print << U"🎤 VOICEVOX Engine Version: " << version;
+		// VOICEVOX の接続状態とバージョンを確認
+		if (version == U"(接続エラー)")
 		{
-			if (System::MessageBoxYesNo(U"最新の「VOICEVOX（無料）」をインストールしますか？（公式サイトに移動します）") == MessageBoxResult::Yes)
-			{
-				System::LaunchBrowser(U"https://voicevox.hiroshiba.jp/");
-			}
-			System::Exit();
-		}
-	}
-	else if (version != U"0.25.0")
-	{
-		const String msg = U"VOICEVOXのバージョンが動作保証バージョンよりも古いため、"
-			U"正常に動作しない可能性があります。\n\n"
-			U"動作保証バージョン：0.25.0 以降\n"
-			U"現在のバージョン：" + version + U"\n\n"
-			U"このままゲームを起動しますか？";
+			const String msg = U"ゲーム「シングリンク」のすべての機能を利用するには、"
+				U"アプリ「VOICEVOX（無料）」をインストールし、起動した状態でゲームを起動する必要があります。\n\n"
+				U"VOICEVOXを使用しない簡易版ゲーム「シングリンク（簡易モード）」で遊びますか？\n"
+				U"※ 簡易モードではゲーム体験が著しく制限されます。";
 
-		if (System::MessageBoxYesNo(msg) == MessageBoxResult::No)
-		{
-			if (System::MessageBoxYesNo(U"最新の「VOICEVOX（無料）」をインストールしますか？（公式サイトに移動します）") == MessageBoxResult::Yes)
+			if (System::MessageBoxYesNo(msg) == MessageBoxResult::No)
 			{
-				System::LaunchBrowser(U"https://voicevox.hiroshiba.jp/");
+				if (System::MessageBoxYesNo(U"最新の「VOICEVOX（無料）」をインストールしますか？（公式サイトに移動します）") == MessageBoxResult::Yes)
+				{
+					System::LaunchBrowser(U"https://voicevox.hiroshiba.jp/");
+				}
+				System::Exit();
 			}
-			System::Exit();
 		}
+		else if (version != U"0.25.0")
+		{
+			const String msg = U"VOICEVOXのバージョンが動作保証バージョンよりも古いため、"
+				U"正常に動作しない可能性があります。\n\n"
+				U"動作保証バージョン：0.25.0 以降\n"
+				U"現在のバージョン：" + version + U"\n\n"
+				U"このままゲームを起動しますか？";
+
+			if (System::MessageBoxYesNo(msg) == MessageBoxResult::No)
+			{
+				if (System::MessageBoxYesNo(U"最新の「VOICEVOX（無料）」をインストールしますか？（公式サイトに移動します）") == MessageBoxResult::Yes)
+				{
+					System::LaunchBrowser(U"https://voicevox.hiroshiba.jp/");
+				}
+				System::Exit();
+			}
+		}
+		getData().voicevoxCheckedFlag = true;
 	}
 
 	// --- モニタ情報を取得 ---
 	const Array<MonitorInfo> monitors = System::EnumerateMonitors();
 	const size_t currentMonitorIndex = System::GetCurrentMonitorIndex();
+
+	if (monitors.isEmpty() || currentMonitorIndex >= monitors.size())
+	{
+		Print << U"[Error] モニタ情報の取得に失敗しました。";
+		System::Exit();  // または安全なデフォルト動作
+	}
+
 	const auto& monitor = monitors[currentMonitorIndex];
 
 	// ✅ 正しいモニタの表示領域サイズを使用
@@ -96,7 +106,7 @@ void Scene3::update()
 		}
 		else
 		{
-			Print << U"vvprojが選択されていません。";
+			selectVVProjFlag = true;
 		}
 	}
 	if (ButtonAt(storyButtonCenter, storyButtonSize))
@@ -116,6 +126,7 @@ void Scene3::update()
 void Scene3::draw() const
 {
 	background.draw();
+
 	logo.scaled(0.81).drawAt(Scene::Center().x,Scene::Center().y-50);
 	
 	SimpleGUI::ListBoxAt(listBoxStateVV, Vec2{ Scene::Center().x+2, Scene::Center().y + 208}, 440, 238);
@@ -126,4 +137,8 @@ void Scene3::draw() const
 	storyButton.scaled(storyButtonScale).drawAt(storyButtonCenter);
 	howtoplayButton.scaled(howtoplayButtonScale).drawAt(howtoplayButtonCenter);
 	creditButton.scaled(creditButtonScale).drawAt(creditButtonCenter);
+
+	if (selectVVProjFlag) {
+		m_font(U"←きょくをえらんでね！").drawAt(40, Scene::Center().movedBy(460, 140), kogetyaColor);
+	}
 }

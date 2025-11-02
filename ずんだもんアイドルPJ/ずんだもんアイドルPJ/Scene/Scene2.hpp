@@ -32,7 +32,7 @@ private:
 	String m_currentTopic;     // 現在表示中のお題テキスト
 
 	Stopwatch m_timer;   // カウントダウン用タイマー
-	const int32 m_timeLimit = 10; // 各お題の制限時間（秒）
+	const int32 m_timeLimit = 15; // 各お題の制限時間（秒）
 
 	// GIF アニメーション画像を開く
 	const AnimatedGIFReader gif{ Resource(U"Texture/assets/game_background2.gif") };

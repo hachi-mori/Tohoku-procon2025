@@ -103,16 +103,16 @@ void Result::draw() const
 		}
 	}
 	else if (25 < getData().finalRhymeMatchPercent && getData().finalRhymeMatchPercent <= 50) {
-		if (!textures3.isEmpty())
-		{
-			size_t frameIndex3 = AnimatedGIFReader::GetFrameIndex(t, delays3);
-			textures3[frameIndex3].drawAt(Scene::Center());
-		}
-	}else if (getData().finalRhymeMatchPercent <= 25) {
 		if (!textures4.isEmpty())
 		{
 			size_t frameIndex4 = AnimatedGIFReader::GetFrameIndex(t, delays4);
 			textures4[frameIndex4].drawAt(Scene::Center());
+		}
+	}else if (getData().finalRhymeMatchPercent <= 25) {
+		if (!textures3.isEmpty())
+		{
+			size_t frameIndex3 = AnimatedGIFReader::GetFrameIndex(t, delays3);
+			textures3[frameIndex3].drawAt(Scene::Center());
 		}
 	}
 
@@ -142,14 +142,14 @@ void Result::draw() const
 	// --- スコアなど ---
 	m_font(ToString(static_cast<double>(getData().finalRhymeMatchPercent), 0) + U" %")
 		.drawAt(150, Scene::Center().movedBy(540, -250), goldColor);
-	m_font(U"あなたのスコア").drawAt(35, Scene::Center().movedBy(150, -300), goldColor);
+	m_font(U"あなたの韻（いん）スコア").drawAt(35, Scene::Center().movedBy(170, -340), goldColor);
 	m_font(getData().songTitle).drawAt(50, Scene::Center().movedBy(450, -420), goldColor);
 
 	// --- 🎵 歌詞の色付き描画（字間調整つき） ---
 	const ColorF normalColor = kogetyaColor;
 	const ColorF userColor = Palette::Orange;
-	const double fontSize = 52;
-	const double letterSpacing = 0.5;
+	const double fontSize = 50;
+	const double letterSpacing = 0.0;
 
 	Vec2 basePos = Scene::Center().movedBy(110, -70);
 	Vec2 penPos = basePos;

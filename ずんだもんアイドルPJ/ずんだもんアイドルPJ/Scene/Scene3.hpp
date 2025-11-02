@@ -44,4 +44,9 @@ private:
 	SizeF creditButtonSize = creditButton.size() * (creditButtonScale - 0.05);  // 画像スケールから少しだけ小さくする
 
 	mutable bool gameStartFlag = false;
+	mutable bool selectVVProjFlag = false;
+
+	const FilePath fontpath = Resource(U"Texture/Futehodo-MaruGothic.ttf");
+	Font m_font{ FontMethod::MSDF, 40 , fontpath };
+	Color kogetyaColor = { 134,79,9 };
 };

@@ -63,6 +63,8 @@ struct GameData
 	double finalRhymeMatchPercent = 100.0; // 👈 【追加】楽曲を通しての最終一致率
 
 	String fullLyrics; // 🎵 【追加】全ての替え歌をまとめた最終歌詞
+
+	bool voicevoxCheckedFlag = false;
 };
 
 using App = SceneManager<String, GameData>;

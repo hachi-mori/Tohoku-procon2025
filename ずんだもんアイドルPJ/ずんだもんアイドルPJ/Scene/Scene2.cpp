@@ -129,6 +129,35 @@ String Scene2::replaceChoonWithVowel(const String& text) const
 
 void Scene2::update()
 {
+	// ✅ どこからでも呼べる全体集計 + 遷移
+	auto finalizeAndExit = [&]()
+		{
+			size_t totalSyllables = 0;
+			size_t totalMatches = 0;
+
+			for (const auto& task : getData().solvedTasks)
+			{
+				totalSyllables += task.userSyllables.size();
+				totalMatches += task.matchesCount;
+			}
+
+			double finalRhymeMatchPercent = 0.0;
+			if (totalSyllables > 0)
+			{
+				finalRhymeMatchPercent = (static_cast<double>(totalMatches) / totalSyllables) * 100.0;
+			}
+			getData().finalRhymeMatchPercent = finalRhymeMatchPercent;
+
+			String reconstructedLyrics;
+			for (const auto& task : getData().solvedTasks)
+			{
+				reconstructedLyrics += task.userInput + U"\n";
+			}
+			getData().fullLyrics = reconstructedLyrics;
+
+			changeScene(U"Scene1", 0.3s);
+		};
+
 	if (m_showCountdown)
 	{
 		double elapsed = m_countdownTimer.s();
@@ -153,20 +182,13 @@ void Scene2::update()
 	// カウントダウン
 	const int32 remaining = m_timeLimit - static_cast<int32>(m_timer.s());
 
-	// タイムアップ処理
+	// ── タイムアップ分岐 ──
 	if (remaining <= 0)
 	{
 		const Array<String> targetSyllables = splitSyllables(talkLines[currentIndex]);
 		const size_t L = targetSyllables.size();
 
-		// 「ららら（音節数）」を生成
-		String autoAnswer;
-		for (size_t i = 0; i < L; ++i)
-		{
-			autoAnswer += U"ら";
-		}
-
-		// 0% スコアで記録
+		String autoAnswer(L, U'ら');              // ← L 個の「ら」を一括生成
 		getData().solvedTasks << SolvedTask{
 			.phrase = talkLines[currentIndex],
 			.syllables = targetSyllables,
@@ -177,7 +199,6 @@ void Scene2::update()
 			.matchesCount = 0
 		};
 
-		// 次のお題へ
 		++currentIndex;
 
 		if (currentIndex < talkLines.size())
@@ -185,13 +206,13 @@ void Scene2::update()
 			currentTargetLen = splitSyllables(talkLines[currentIndex]).size();
 			m_currentTopic = talkLines[currentIndex];
 			m_textState.text.clear();
-			m_timer.restart(); // タイマー再スタート
+			m_timer.restart();
 		}
 		else
 		{
-			changeScene(U"Scene1", 0.3s);
+			// ✅ 最後のお題がタイムアップでも集計してから遷移
+			finalizeAndExit();
 		}
-
 		return;
 	}
 
@@ -304,45 +325,7 @@ void Scene2::update()
 			}
 			else
 			{
-				Print << U"🎉 全てクリア！";
-
-				// --- 🔔 全体集計ロジックの追加（GameDataに最終結果を保存） ---
-				size_t totalSyllables = 0;
-				size_t totalMatches = 0;
-
-				// 記録されたすべてのお題の結果を集計
-				for (const auto& task : getData().solvedTasks)
-				{
-					totalSyllables += task.userSyllables.size(); // 各お題の音韻数
-					totalMatches += task.matchesCount;           // 各お題の一致数
-				}
-
-				double finalRhymeMatchPercent = 0.0;
-				if (totalSyllables > 0)
-				{
-					// (合計一致数 / 合計音韻数) * 100%
-					finalRhymeMatchPercent = (static_cast<double>(totalMatches) / totalSyllables) * 100.0;
-				}
-
-				// GameData に最終一致率を保存
-				getData().finalRhymeMatchPercent = finalRhymeMatchPercent;
-
-				// GameData に保存
-				String reconstructedLyrics;
-				for (const auto& task : getData().solvedTasks)
-				{
-					reconstructedLyrics += task.userInput + U"\n"; // 各フレーズを改行で結合
-				}
-				getData().fullLyrics = reconstructedLyrics;
-
-				// 結果出力
-				//Console << U"🌟 全体結果：" << totalMatches << U" / " << totalSyllables << U" 音韻一致";
-				//Console << U"💯 最終一致率：" << finalRhymeMatchPercent << U"%";
-
-				// --- 全体集計ロジックの追加 終了 ---
-
-				// ★ 全クリアしたら次のシーンに遷移
-				changeScene(U"Scene1", 0.3s);
+				finalizeAndExit();
 			}
 
 			m_textState.text.clear();
@@ -350,8 +333,6 @@ void Scene2::update()
 
 		m_textState.active = true;
 	}
-
-
 }
 
 void Scene2::draw() const
