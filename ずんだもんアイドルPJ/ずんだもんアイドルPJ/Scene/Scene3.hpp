@@ -13,7 +13,6 @@ public:
 	void draw() const override;
 
 private:
-	URL baseURL = U"http://localhost:50021";
 
 	Array<String> vvprojNames;
 	mutable ListBoxState listBoxStateVV;
@@ -49,4 +48,11 @@ private:
 	const FilePath fontpath = Resource(U"Texture/Futehodo-MaruGothic.ttf");
 	Font m_font{ FontMethod::MSDF, 40 , fontpath };
 	Color kogetyaColor = { 134,79,9 };
+
+	mutable TextEditState urlBox;
+	String okVersion = U"0.25.0";
+	mutable String connectToVoiceVoxText;
+	void checkVVVersion();
+
+	mutable bool urlBoxPrevious = false;
 };

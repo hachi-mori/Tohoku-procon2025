@@ -17,10 +17,6 @@ private:
 	// キャラクター上限
 	static constexpr size_t kMaxCharacters = 5;
 
-	// VOICEVOX 関連
-	URL baseURL = U"http://localhost:50021";
-
-
 	// ファイル関連
 	Optional<FilePath> vvprojPath;
 	const FilePath singQuery = U"Query/SingQuery.json";

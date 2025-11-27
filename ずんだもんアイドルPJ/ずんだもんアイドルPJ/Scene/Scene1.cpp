@@ -77,7 +77,7 @@ Scene1::Scene1(const InitData& init)
 	m_timer.restart();
 
 	m_task = Async([=]() {
-		return VOICEVOX::SynthesizeFromJSONFileWrapperSplit(score, songwav, spkID, baseURL, 2500, keyShift);
+		return VOICEVOX::SynthesizeFromJSONFileWrapperSplit(score, songwav, spkID, getData().baseURL, 2500, keyShift);
 	});
 }
 

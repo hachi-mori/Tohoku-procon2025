@@ -65,6 +65,8 @@ struct GameData
 	String fullLyrics; // 🎵 【追加】全ての替え歌をまとめた最終歌詞
 
 	bool voicevoxCheckedFlag = false;
+
+	URL baseURL = U"http://localhost:50021";
 };
 
 using App = SceneManager<String, GameData>;
