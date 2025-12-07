@@ -8,13 +8,39 @@ WriteLyrics::WriteLyrics(const InitData& init)
 
 	talkLines = VOICEVOX::ExtractTalkUtterances(getData().vvprojPath);
 
+	// ===============================
+	// 🎯 ここで 1〜5問目のお題を決める
+	//    - fontSize: フォントサイズ
+	//    - text    : 画面中央に表示するお題テキスト
+	// ===============================
+	m_topics = {
+		{ 100, U"① やすいおさかなは？" },
+		{ 90, U"② おいしいおさかなは？" },
+		{ 90, U"③ しゅんのおさかなは？" },
+		{ 100, U"④ すきなおさかなは？" },
+		{ 80, U"⑤ いまたべたいおさかなは？" },
+	};
+	// ※ ここを好きなテキスト＆サイズに書き換えて使う
+
 	if (!talkLines.isEmpty())
 	{
 		currentIndex = 0;
-		currentTargetLen = splitSyllables(talkLines[currentIndex]).size();
+		m_currentTopic = talkLines[currentIndex]; // ← もう表示には使わないが残してOK
+		getData().solvedTasks.clear();
+		getData().finalRhymeMatchPercent = 0.0; // スコア機能は無効化
+	}
+	else
+	{
+		m_currentTopic = U"お題がありません";
+	}
+
+	if (!talkLines.isEmpty())
+	{
+		currentIndex = 0;
+		// 🔽 お題とは無関係に、2〜4 音節のどれかをターゲットにする
 		m_currentTopic = talkLines[currentIndex]; // 🎯 最初のお題を保持
 		getData().solvedTasks.clear();
-		getData().finalRhymeMatchPercent = 0.0;
+		getData().finalRhymeMatchPercent = 0.0; // スコア機能は無効化
 	}
 	else
 	{
@@ -108,11 +134,11 @@ String WriteLyrics::replaceChoonWithVowel(const String& text) const
 
 			switch (vowel)
 			{
-			case 'a': result += U"あ"; break;
-			case 'i': result += U"い"; break;
-			case 'u': result += U"う"; break;
-			case 'e': result += U"え"; break;
-			case 'o': result += U"お"; break;
+			case 'a': result += U"ア"; break;
+			case 'i': result += U"イ"; break;
+			case 'u': result += U"ウ"; break;
+			case 'e': result += U"エ"; break;
+			case 'o': result += U"オ"; break;
 			case 'N': result += U"ん"; break;
 			case 'Q': result += U"っ"; break;
 			default:  result += U"ら"; break; // 不明時はそのまま
@@ -129,31 +155,20 @@ String WriteLyrics::replaceChoonWithVowel(const String& text) const
 
 void WriteLyrics::update()
 {
-	// ✅ どこからでも呼べる全体集計 + 遷移
+
+	// ✅ 全体集計 + 遷移（韻スコアは使わない）
 	auto finalizeAndExit = [&]()
 		{
-			size_t totalSyllables = 0;
-			size_t totalMatches = 0;
-
-			for (const auto& task : getData().solvedTasks)
-			{
-				totalSyllables += task.userSyllables.size();
-				totalMatches += task.matchesCount;
-			}
-
-			double finalRhymeMatchPercent = 0.0;
-			if (totalSyllables > 0)
-			{
-				finalRhymeMatchPercent = (static_cast<double>(totalMatches) / totalSyllables) * 100.0;
-			}
-			getData().finalRhymeMatchPercent = finalRhymeMatchPercent;
-
+			// ここでは歌詞の再構成だけ行う
 			String reconstructedLyrics;
 			for (const auto& task : getData().solvedTasks)
 			{
 				reconstructedLyrics += task.userInput + U"\n";
 			}
 			getData().fullLyrics = reconstructedLyrics;
+
+			// スコア機能は無効なので 0 固定
+			getData().finalRhymeMatchPercent = 0.0;
 
 			changeScene(U"VocalSynthesis", 0.3s);
 		};
@@ -186,15 +201,18 @@ void WriteLyrics::update()
 	if (remaining <= 0)
 	{
 		const Array<String> targetSyllables = splitSyllables(talkLines[currentIndex]);
-		const size_t L = targetSyllables.size();
 
-		String autoAnswer(L, U'ら');              // ← L 個の「ら」を一括生成
+		// 🔽 タイムアップ時も「現在のお題で要求されていた 2〜4 音節分」の「ら」で埋める
+		String autoAnswer(4, U'ら');
+
+		m_errorMessage.clear();
+
 		getData().solvedTasks << SolvedTask{
 			.phrase = talkLines[currentIndex],
 			.syllables = targetSyllables,
 			.userInput = autoAnswer,
 			.userSyllables = splitSyllables(autoAnswer),
-			.score = 0.0,
+			.score = 0.0,  // スコア機能は無効
 			.rhymeMatchPercent = 0.0,
 			.matchesCount = 0
 		};
@@ -203,7 +221,6 @@ void WriteLyrics::update()
 
 		if (currentIndex < talkLines.size())
 		{
-			currentTargetLen = splitSyllables(talkLines[currentIndex]).size();
 			m_currentTopic = talkLines[currentIndex];
 			m_textState.text.clear();
 			m_timer.restart();
@@ -216,17 +233,14 @@ void WriteLyrics::update()
 		return;
 	}
 
-	// 音節数カウント
-	const Array<String> syllables = splitSyllables(m_textState.text);
-
 	if (m_textState.enterKey)
 	{
 		m_textState.enterKey = false;
 
-		// ✅ ひらがな判定（ここを追加）
+		// ✅ ひらがな判定
 		if (!isHiraganaOnly(m_textState.text))
 		{
-			Print << U"⚠️ ひらがなのみで入力してください。";
+			m_errorMessage = U"⚠️ ひらがなのみで入力してください";
 			m_textState.active = true;
 			return; // ← 処理を中断（送信しない）
 		}
@@ -234,7 +248,7 @@ void WriteLyrics::update()
 		// ✅ 先頭が長音ならエラー
 		if (!m_textState.text.isEmpty() && m_textState.text.front() == U'ー')
 		{
-			Print << U"⚠️ 言葉の先頭を「ー」から始めることはできません。";
+			m_errorMessage = U"⚠️ 言葉の先頭を「ー」から始めることはできません";
 			m_textState.active = true;
 			return;
 		}
@@ -242,7 +256,7 @@ void WriteLyrics::update()
 		// ✅ 促音「っ」が含まれていたらエラー
 		if (m_textState.text.includes(U'っ'))
 		{
-			Print << U"⚠️ 「っ」を入力することはできません。";
+			m_errorMessage = U"⚠️ 「っ」を入力することはできません";
 			m_textState.active = true;
 			return;
 		}
@@ -250,87 +264,119 @@ void WriteLyrics::update()
 		// ✅ 「ー」を直前の母音に変換
 		String normalizedText = replaceChoonWithVowel(m_textState.text);
 
-		const Array<String> syllables2 = splitSyllables(normalizedText);
+		// 音節分割
+		Array<String> syllables2 = splitSyllables(normalizedText);
+		const size_t s = syllables2.size();
 
-		if (syllables2.size() != currentTargetLen)
+		// 🔽 音節数チェック（2〜4音節のみ許可）
+		if (s < 2 || s > 4)
 		{
-			Print << U"⚠️ 音節数エラー：" << syllables2.size()
-				<< U"（必要：" << currentTargetLen << U"）";
+			m_errorMessage = U"⚠️ 2〜4 音節で入力してください\n（いま "
+				+ Format(s) + U" 音節）";
+			m_textState.active = true;
+			return;
+		}
+
+		// 🔽 ここから「必ず4音節に変換」する処理
+		// 2音節: 最後の音節の母音を1音節として追加し、その後ろに「が」
+		// 3音節: 「が」を追加
+		// 4音節: 何もしない
+
+		// 母音 → ひらがな文字への変換ヘルパー
+		auto vowelToKana = [](char v)->String
+			{
+				switch (v)
+				{
+				case 'a': return U"ァ";
+				case 'i': return U"ィ";
+				case 'u': return U"ゥ";
+				case 'e': return U"ェ";
+				case 'o': return U"ォ";
+				case 'N': return U"ん"; // 念のため
+				case 'Q': return U"っ";
+				default:  return U"あ"; // デフォルト（ほぼ来ない想定）
+				}
+			};
+
+		String finalText = normalizedText;
+		Array<String> finalSyllables = syllables2;
+
+		if (s == 2)
+		{
+			const char v = getVowel(syllables2.back());
+			const String vowelKana = vowelToKana(v);
+
+			if (currentIndex <= 2)
+			{
+				// 🎲 1〜3問目 & 6問目以降：従来どおり「母音 + が」
+				finalText += vowelKana;
+				finalText += U"が";
+
+				finalSyllables << vowelKana;
+				finalSyllables << U"が";
+			}
+			else // 4〜5問目 (currentIndex == 3 or 4)
+			{
+				// 🎯 4〜5問目：母音をもう1つ追加（「が」は付けない）
+				finalText += vowelKana;
+				finalText += vowelKana;
+
+				finalSyllables << vowelKana;
+				finalSyllables << vowelKana;
+			}
+		}
+		else if (s == 3)
+		{
+			if (currentIndex <= 2 || currentIndex >= 5)
+			{
+				// 🎲 1〜3問目 & 6問目以降：従来どおり「が」を追加
+				finalText += U"が";
+				finalSyllables << U"が";
+			}
+			else // 4〜5問目
+			{
+				// 🎯 4〜5問目：末尾母音を1つ追加（「が」は付けない）
+				const char v = getVowel(syllables2.back());
+				const String vowelKana = vowelToKana(v);
+
+				finalText += vowelKana;
+				finalSyllables << vowelKana;
+			}
+		}
+		// s == 4 の場合は finalText / finalSyllables をそのまま使う
+
+		// ここに来た時点で finalSyllables.size() は必ず 4 になる
+
+		const Array<String> targetSyllables = splitSyllables(talkLines[currentIndex]);
+
+		// ✅ 韻スコアは使わないので、0 を入れておくだけ
+		getData().solvedTasks << SolvedTask{
+			.phrase = talkLines[currentIndex],
+			.syllables = targetSyllables,
+			.userInput = finalText,       // ← 4音節に変換後の文字列
+			.userSyllables = finalSyllables,  // ← 4音節の配列
+			.score = 0.0,
+			.rhymeMatchPercent = 0.0,
+			.matchesCount = 0
+		};
+
+		// 🎉 エラーは解消されたので消す
+		m_errorMessage.clear();
+
+		// 次のお題へ
+		++currentIndex;
+		m_timer.restart(); // タイマー再スタート
+
+		if (currentIndex < talkLines.size())
+		{
+			m_currentTopic = talkLines[currentIndex]; // 🎯 表示中お題を更新
 		}
 		else
 		{
-			// 🎯 スコア処理は normalizedText を使う
-			const Array<String> targetSyllables = splitSyllables(talkLines[currentIndex]);
-			const size_t L = targetSyllables.size();
-
-			size_t matches = 0;
-			for (size_t i = 0; i < L; ++i)
-			{
-				const char targetVowel = getVowel(targetSyllables[i]);
-				const char userVowel = getVowel(syllables2[i]);
-
-				if (targetVowel == userVowel)
-				{
-					matches++;
-				}
-			}
-
-			// 調整ノブの定義
-			constexpr double k = 0.25; // 長さボーナスの伸び率
-			constexpr double C = 2.0;  // 長さボーナスの上限
-
-			// 基本スコア r (一致比率)
-			const double r = static_cast<double>(matches) / L;
-
-			// 長さボーナス M(L)
-			double M_L = 1.0 + k * (L - 3.0);
-			if (L < 3) M_L = 1.0; // 3音韻未満は一律 1.0
-			const double lengthBonus = Min(C, M_L);
-
-			// 最終スコア S
-			const double score = r * lengthBonus;
-
-			// 🔔 個別のお題のパーセンテージの計算と出力
-			const double percentMatch = r * 100.0;
-
-			/*
-						Print << U"✅ クリア：" << m_textState.text
-				<< U"（" << syllables.size() << U" 音節）";
-
-			*/
-
-			// 🏅 スコア表示とパーセンテージ表示を追加
-			//Console << U"🏅 スコア：" << score << U" (一致数:" << matches << U"/" << L << U")";
-			//Console << U"💯 韻一致率：" << percentMatch << U"%";
-
-			// ✅ クリア情報を記録
-			getData().solvedTasks << SolvedTask{
-				.phrase = talkLines[currentIndex],
-				.syllables = targetSyllables,
-				.userInput = normalizedText,
-				.userSyllables = syllables2,
-				.score = score,
-				.rhymeMatchPercent = percentMatch,
-				.matchesCount = matches
-			};
-
-			// 次のお題へ
-			++currentIndex;
-			m_timer.restart(); // タイマー再スタート
-
-			if (currentIndex < talkLines.size())
-			{
-				currentTargetLen = splitSyllables(talkLines[currentIndex]).size();
-				m_currentTopic = talkLines[currentIndex]; // 🎯 表示中お題を更新
-			}
-			else
-			{
-				finalizeAndExit();
-			}
-
-			m_textState.text.clear();
+			finalizeAndExit();
 		}
 
+		m_textState.text.clear();
 		m_textState.active = true;
 	}
 }
@@ -369,11 +415,24 @@ void WriteLyrics::draw() const
 	frame.draw();
 
 	// 🎯 お題を中央に大きく描画
-	if (!m_currentTopic.isEmpty())
+	if (currentIndex < m_topics.size())
 	{
-		m_font(m_currentTopic)
+		// 1〜5問目: プログラム内で決めたお題を表示
+		const auto& topic = m_topics[currentIndex];
+
+		m_font(topic.text)
+			.drawAt(topic.fontSize,
+				Vec2{ Scene::Center().x, Scene::Center().y - 105 },
+				kogetyaColor);
+	}
+	else if (!talkLines.isEmpty() && currentIndex < talkLines.size())
+	{
+		// 6問目以降 or topics が足りない場合:
+		// これまで通り vvproj からのテキストを表示（保険）
+		m_font(talkLines[currentIndex])
 			.drawAt(Scene::Center().x, Scene::Center().y - 105, kogetyaColor);
 	}
+
 
 	// 💬 テキストボックスを下中央に配置
 	constexpr double textBoxWidth = 200.0;
@@ -407,19 +466,27 @@ void WriteLyrics::draw() const
 	const Vec2 pos{ Scene::Width() - 155, 145 };
 	m_font(timeText).drawAt(97, pos, (remaining <= 3 ? Palette::Red : kogetyaColor));
 
-	// 🔁 直前のお題と回答・スコアを表示（2問目以降のみ）
+	// ❗ 入力エラー表示（あれば）
+	if (!m_errorMessage.isEmpty())
+	{
+		// 位置や大きさは好みで微調整してOK
+		result_font(m_errorMessage)
+			.draw(22, Vec2{ 40, 480 }, Palette::Red);
+		// あるいは中央寄せにしたいなら：
+		// result_font(m_errorMessage).drawAt(22, Scene::Center().movedBy(0, 140), Palette::Red);
+	}
+	/*
+	// 🔁 直前のお題と回答を表示（2問目以降のみ）
 	if (currentIndex > 0)
 	{
 		const auto& prevTask = getData().solvedTasks[currentIndex - 1];
 		const double yBase = 520;
 
-		// 前のお題
-		result_font(U"　　　前のお題：" + prevTask.phrase).draw(22, Vec2{ 40, yBase }, Palette::White);
+		result_font(U"　　　前のお題：" + prevTask.phrase)
+			.draw(22, Vec2{ 40, yBase }, Palette::White);
 
-		// ユーザーの回答
-		result_font(U"　あなたの回答：" + prevTask.userInput).draw(22, Vec2{ 40, yBase + 30 }, Palette::Skyblue);
-
-		// スコア（百分率で表示）
-		result_font(U"韻（いん）の数：" + Format(prevTask.matchesCount) + U"こ").draw(22, Vec2{ 40, yBase + 60 }, Palette::Yellow);
+		result_font(U"　あなたの回答：" + prevTask.userInput)
+			.draw(22, Vec2{ 40, yBase + 30 }, Palette::Skyblue);
 	}
+	*/
 }

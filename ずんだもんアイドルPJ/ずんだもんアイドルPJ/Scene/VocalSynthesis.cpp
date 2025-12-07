@@ -92,9 +92,9 @@ void VocalSynthesis::update()
 		if (success)
 		{
 			// 🎵 音声と伴奏をロード
-			Audio songAudio{ m_songWavPath, Loop::No };
+			Audio songAudio{ m_songWavPath, Loop::Yes };
 			FileSystem::Remove(m_scorePath);
-			Audio inst{ U"Inst/" + m_baseName + U".mp3", Loop::No };
+			Audio inst{ U"Inst/" + m_baseName + U".mp3", Loop::Yes };
 
 			//Console << U"「" + m_baseName + U"」の再生準備が完了しました。";
 

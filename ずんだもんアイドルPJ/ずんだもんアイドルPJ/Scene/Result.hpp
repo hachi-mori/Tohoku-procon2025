@@ -47,12 +47,4 @@ private:
 	double titleButtonScale = 1.0;
 	Vec2 titleButtonCenter = Scene::Center().movedBy(-850, 440);
 	SizeF titleButtonSize = titleButton.size() * (titleButtonScale - 0.05);	// 画像スケールから少しだけ小さくする
-
-	Texture restartButton{ Resource(U"Texture/assets/button/restart.png") };
-	double restartButtonScale = 0.5;
-	Vec2 restartButtonCenter = Scene::Center().movedBy(0, 450);
-	SizeF restartButtonSize = restartButton.size() * (restartButtonScale - 0.05);	// 画像スケールから少しだけ小さくする
-
-	void PostResultTweet(int32 score);
-
 };

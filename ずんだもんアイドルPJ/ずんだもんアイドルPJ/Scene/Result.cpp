@@ -14,7 +14,7 @@ Result::Result(const InitData& init)
 	}
 	else
 	{
-		Print << U"⚠️ songAudio が空です。";
+		Console << U"⚠️ songAudio が空です。";
 	}
 
 	// 各フレームの画像と、次のフレームへのディレイ（ミリ秒）をロードする
@@ -26,7 +26,7 @@ Result::Result(const InitData& init)
 	}
 	else
 	{
-		Print << U"⚠️ gif1 (zunda_singing.gif) の読み込みに失敗しました";
+		Console << U"⚠️ gif1 (zunda_singing.gif) の読み込みに失敗しました";
 	}
 	// 2️ 晴れ
 	if (gif2.read(images2, delays2))
@@ -36,55 +36,18 @@ Result::Result(const InitData& init)
 	}
 	else
 	{
-		Print << U"⚠️ gif2 (result_sunny.gif) の読み込みに失敗しました";
+		Console << U"⚠️ gif2 (result_sunny.gif) の読み込みに失敗しました";
 	}
-	// 3️ 雨
-	if (gif3.read(images3, delays3))
-	{
-		textures3 = images3.map([](const Image& image3) { return Texture{ image3 }; });
-		images3.clear();
-	}
-	else
-	{
-		Print << U"⚠️ gif3 (result_rainy.gif) の読み込みに失敗しました";
-	}
-	// 4️ 曇り
-	if (gif4.read(images4, delays4))
-	{
-		textures4 = images4.map([](const Image& image4) { return Texture{ image4 }; });
-		images4.clear();
-	}
-	else
-	{
-		Print << U"⚠️ gif4 (result_cloudy.gif) の読み込みに失敗しました";
-	}
-}
-
-void Result::PostResultTweet(int32 score)
-{
-	const String text = U"ぼくは {} 点をとったのだ！\n#Siv3D\n#シングリンク\n#ずんだもん\nhttps://scrapbox.io/bnscup2025/%E3%82%B7%E3%83%B3%E3%82%B0%E3%83%AA%E3%83%B3%E3%82%AF"_fmt(score);
-
-	Twitter::OpenTweetWindow(text);
 }
 
 void Result::update()
 {
-	if (SimpleGUI::Button(U"Share Result", Vec2{ 1800, 970 }))
-	{
-		PostResultTweet(static_cast<int>(getData().finalRhymeMatchPercent));
-	}
 
 	if (ButtonAt(titleButtonCenter, titleButtonSize))
 	{
+		getData().instAudio.stop();
+		getData().songAudio[0].stop();
 		changeScene(U"Title", 0.3s);
-	}
-
-	if (!getData().instAudio.isPlaying()) {
-		if (ButtonAt(restartButtonCenter, restartButtonSize)) {
-			getData().instAudio.setVolume(0.4);
-			getData().songAudio[0].play();
-			getData().instAudio.play();
-		}
 	}
 }
 
@@ -95,59 +58,29 @@ void Result::draw() const
 	double t = Scene::Time();
 
 	// スコアに応じたアニメーション表示
-	if (50 < getData().finalRhymeMatchPercent) {
+
 		if (!textures2.isEmpty())
 		{
 			size_t frameIndex2 = AnimatedGIFReader::GetFrameIndex(t, delays2);
 			textures2[frameIndex2].drawAt(Scene::Center());
 		}
-	}
-	else if (25 < getData().finalRhymeMatchPercent && getData().finalRhymeMatchPercent <= 50) {
-		if (!textures4.isEmpty())
-		{
-			size_t frameIndex4 = AnimatedGIFReader::GetFrameIndex(t, delays4);
-			textures4[frameIndex4].drawAt(Scene::Center());
-		}
-	}else if (getData().finalRhymeMatchPercent <= 25) {
-		if (!textures3.isEmpty())
-		{
-			size_t frameIndex3 = AnimatedGIFReader::GetFrameIndex(t, delays3);
-			textures3[frameIndex3].drawAt(Scene::Center());
-		}
-	}
 
-	// スコアに応じたキャラクター表示
-	if (90 < getData().finalRhymeMatchPercent) {
-		if (!kakusei.isEmpty())
-		{
-			kakusei.scaled(0.9).drawAt(Scene::Center().movedBy(-400, -60));
-		}
-	}else if ((10 < getData().finalRhymeMatchPercent && getData().finalRhymeMatchPercent <= 90)) {
-		if (!textures.isEmpty())
-		{
-			size_t frameIndex = AnimatedGIFReader::GetFrameIndex(t, delays);
-			textures[frameIndex].drawAt(Scene::Center());
-		}
-	}else if (getData().finalRhymeMatchPercent <= 10) {
-		if (!sippai.isEmpty())
-		{
-			sippai.draw();
-		}
+	// スコアに応じたキャラクター表示ではなく毎回固定表示
+	if (!textures.isEmpty())
+	{
+		size_t frameIndex = AnimatedGIFReader::GetFrameIndex(t, delays);
+		textures[frameIndex].drawAt(Scene::Center());
 	}
-	
 	frame.drawAt(Scene::Center().movedBy(80, 0));
 	titleButton.scaled(titleButtonScale).drawAt(titleButtonCenter);
-	if (!getData().instAudio.isPlaying()){restartButton.scaled(restartButtonScale).drawAt(restartButtonCenter);}
-
 	// --- スコアなど ---
-	m_font(ToString(static_cast<double>(getData().finalRhymeMatchPercent), 0) + U" %")
-		.drawAt(150, Scene::Center().movedBy(540, -250), goldColor);
-	m_font(U"あなたの韻（いん）スコア").drawAt(35, Scene::Center().movedBy(170, -340), goldColor);
-	m_font(getData().songTitle).drawAt(50, Scene::Center().movedBy(450, -420), goldColor);
+	m_font(U"オリジナルおさかなソング")
+		.drawAt(70, Scene::Center().movedBy(450, -250), goldColor);
+	m_font(getData().songTitle+U"の曲で作った").drawAt(50, Scene::Center().movedBy(450, -420), goldColor);
 
 	// --- 🎵 歌詞の色付き描画（字間調整つき） ---
 	const ColorF normalColor = kogetyaColor;
-	const ColorF userColor = Palette::Orange;
+	const ColorF userColor = kogetyaColor;
 	const double fontSize = 50;
 	const double letterSpacing = 0.0;
 
@@ -193,6 +126,5 @@ void Result::draw() const
 		penPos.x = basePos.x;
 		penPos.y += m_font.height() * 1.3;
 	}
-	SimpleGUI::Button(U"Share Result", Vec2{ 1700, 970 });
 }
 

@@ -32,7 +32,7 @@ private:
 	String m_currentTopic;     // 現在表示中のお題テキスト
 
 	Stopwatch m_timer;   // カウントダウン用タイマー
-	const int32 m_timeLimit = 15; // 各お題の制限時間（秒）
+	const int32 m_timeLimit = 60; // 各お題の制限時間（秒）
 
 	// GIF アニメーション画像を開く
 	const AnimatedGIFReader gif{ Resource(U"Texture/assets/game_background2.gif") };
@@ -45,4 +45,16 @@ private:
 	Stopwatch m_countdownTimer;   // カウントダウン用タイマー
 	bool m_showCountdown = true;  // カウントダウン中フラグ
 	double m_countdownDuration = 5.0; // カウントダウン時間（秒）
+
+	String m_errorMessage;  // 👈 追加：入力エラー表示用メッセージ
+
+	// お題の表示用設定
+	struct TopicView
+	{
+		int32 fontSize; // フォントサイズ
+		String text;    // 表示するお題テキスト
+	};
+
+	Array<TopicView> m_topics; // 1〜5問目のお題表示リスト
+
 };

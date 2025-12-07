@@ -424,7 +424,5 @@ gmon.out
 *.exe
 *.log
 
-**/App/inst
-**/App/Score
 **/App/tmp
 **/App/Voice

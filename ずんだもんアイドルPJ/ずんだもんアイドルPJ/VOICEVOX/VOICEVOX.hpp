@@ -84,12 +84,15 @@ namespace VOICEVOX
 	// vvproj(talk) から発話テキストを抽出する
 	Array<String> ExtractTalkUtterances(const FilePath& vvprojPath);
 
-	// 
+	// 替え歌の歌詞を vvproj に適用する
 	JSON ApplyParodyLyrics(
 		const JSON& vvprojOriginal,
 		const Array<SolvedTask>& solvedTasks
 	);
 
+	// vvproj(song) から歌詞テキストを抽出する
 	Array<String> ExtractSongLyrics(const FilePath& vvprojPath);
+
+	// VOICEVOX エンジンのバージョンを取得する
 	String GetEngineVersion(const URL& baseURL, const Duration timeout);
 }

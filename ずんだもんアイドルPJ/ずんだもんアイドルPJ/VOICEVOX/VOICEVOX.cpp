@@ -1248,7 +1248,7 @@ namespace VOICEVOX
 		}
 	}
 
-	// vvproj の歌詞を替え歌に置き換える
+	// vvproj の歌詞を替え歌の歌詞に置き換える
 	JSON ApplyParodyLyrics(
 		const JSON& vvprojOriginal,
 		const Array<SolvedTask>& solvedTasks
@@ -1390,9 +1390,9 @@ namespace VOICEVOX
 		return modified;
 	}
 
-	/// @brief 
+	/// @brief VOICEVOX の .vvproj から 歌唱用の歌詞列を取り出します。
 	/// @param vvprojPath 
-	/// @return 
+	/// @return 歌詞の文字列配列。失敗時は空配列を返します。
 	Array<String> VOICEVOX::ExtractSongLyrics(const FilePath& vvprojPath)
 	{
 		Array<String> lyrics;
@@ -1448,7 +1448,9 @@ namespace VOICEVOX
 			{ U"ワ", U"は" }, { U"ヲ", U"を" }, { U"ヘ", U"へ" },
 			{ U"ヴ", U"ブ" }, { U"シェ", U"しぇ" }, { U"ティ", U"てぃ" },
 			{ U"ディ", U"でぃ" }, { U"チェ", U"ちぇ" }, { U"ウィ", U"うぃ" },
-			{ U"クヮ", U"くぁ" }, { U"グヮ", U"ぐぁ" },{  U"オ", U"う" }
+			{ U"クヮ", U"くぁ" }, { U"グヮ", U"ぐぁ" },
+			{ U"ァ", U""}, { U"ィ", U""}, { U"ゥ", U""}, { U"ェ", U""}, { U"ォ", U""},
+			{ U"ア", U"ー"}, { U"イ", U"ー"}, { U"ウ", U"ー"}, { U"エ", U"ー"}, { U"オ", U"ー"}
 		};
 
 		// 🎵 歌詞＋休符検出

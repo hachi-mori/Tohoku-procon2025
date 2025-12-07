@@ -161,7 +161,7 @@ void Title::draw() const
 	urlBoxPrevious = urlBox.active;
 
 	// テキストボックス描画（ここで active が更新される）
-	SimpleGUI::TextBoxAt(urlBox, Vec2{ 160, 110 }, 300);
+	if (not getData().voicevoxCheckedFlag)SimpleGUI::TextBoxAt(urlBox, Vec2{ 160, 110 }, 300);
 
 	// ↓ここで状態の変化を検出
 	if (urlBoxPrevious && (urlBox.active == false))
