@@ -147,13 +147,13 @@
     <ClCompile Include="VOICEVOX\VOICEVOX.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Scene\Scene1.cpp">
+    <ClCompile Include="Scene\VocalSynthesis.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Scene\Scene2.cpp">
+    <ClCompile Include="Scene\WriteLyrics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Scene\Scene3.cpp">
+    <ClCompile Include="Scene\Title.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Scene\Result.cpp">
@@ -837,16 +837,16 @@
     <ClInclude Include="VOICEVOX\VOICEVOX.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Scene\Scene2.hpp">
+    <ClInclude Include="Scene\WriteLyrics.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Scene\Scene1.hpp">
+    <ClInclude Include="Scene\VocalSynthesis.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Common.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Scene\Scene3.hpp">
+    <ClInclude Include="Scene\Title.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Scene\Result.hpp">

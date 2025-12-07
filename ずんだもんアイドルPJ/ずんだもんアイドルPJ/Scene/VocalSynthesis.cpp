@@ -1,6 +1,6 @@
-﻿# include "Scene1.hpp"
+﻿# include "VocalSynthesis.hpp"
 
-Scene1::Scene1(const InitData& init)
+VocalSynthesis::VocalSynthesis(const InitData& init)
 	: IScene{ init }
 {
 	// GIFに関する処理
@@ -81,7 +81,7 @@ Scene1::Scene1(const InitData& init)
 	});
 }
 
-void Scene1::update()
+void VocalSynthesis::update()
 {
 	// 非同期処理が終わったか？
 	if (m_isLoading && m_task.isReady())
@@ -114,7 +114,7 @@ void Scene1::update()
 	}
 }
 
-void Scene1::draw() const
+void VocalSynthesis::draw() const
 {
 
 	//GIFアニメーションの描画

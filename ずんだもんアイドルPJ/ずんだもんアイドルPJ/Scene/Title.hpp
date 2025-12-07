@@ -2,12 +2,12 @@
 # include "../Common.hpp"
 
 //------------------------------------------------------
-// Scene3 : ゲームシーン
+// Title : タイトル
 //------------------------------------------------------
-class Scene3 : public App::Scene
+class Title : public App::Scene
 {
 public:
-	Scene3(const InitData& init);
+	Title(const InitData& init);
 
 	void update() override;
 	void draw() const override;

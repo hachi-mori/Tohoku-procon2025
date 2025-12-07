@@ -9,7 +9,7 @@ Howtoplay::Howtoplay(const InitData& init)
 void Howtoplay::update()
 {
 	if (MouseL.down()) {
-		changeScene(U"Scene3", 0.3s);
+		changeScene(U"Title", 0.3s);
 	}
 	Cursor::RequestStyle(CursorStyle::Hand);
 }

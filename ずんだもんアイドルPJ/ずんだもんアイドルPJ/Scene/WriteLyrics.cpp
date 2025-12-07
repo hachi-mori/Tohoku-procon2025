@@ -1,7 +1,7 @@
-﻿#include "Scene2.hpp"
+﻿#include "WriteLyrics.hpp"
 
-// Scene2::Scene2 (コンストラクタ) 
-Scene2::Scene2(const InitData& init)
+// WriteLyrics::WriteLyrics (コンストラクタ) 
+WriteLyrics::WriteLyrics(const InitData& init)
 	: IScene{ init }, m_textState{}
 {
 	m_textState.active = true;
@@ -37,8 +37,8 @@ Scene2::Scene2(const InitData& init)
 	m_showCountdown = true;    // カウントダウンモードON
 }
 
-// Scene2::splitSyllables (音節分割関数)
-Array<String> Scene2::splitSyllables(const String& text) const
+// WriteLyrics::splitSyllables (音節分割関数)
+Array<String> WriteLyrics::splitSyllables(const String& text) const
 {
 	const String smallKanaList = U"ゃゅょぁぃぅぇぉっャュョァィゥェォッ";
 	Array<String> result;
@@ -58,8 +58,8 @@ Array<String> Scene2::splitSyllables(const String& text) const
 	return result;
 }
 
-// Scene2::getVowel (母音取得ヘルパー関数) 
-char Scene2::getVowel(const String& syllable) const
+// WriteLyrics::getVowel (母音取得ヘルパー関数) 
+char WriteLyrics::getVowel(const String& syllable) const
 {
 	// 拗音（きゃ、しゅ、てょなど）は最後の母音、撥音/促音は N/Q
 	if (syllable == U"ん" || syllable == U"ン") return 'N'; // 撥音
@@ -81,7 +81,7 @@ char Scene2::getVowel(const String& syllable) const
 	return 'X'; // 不明な母音として扱う
 }
 
-bool Scene2::isHiraganaOnly(const String& text) const
+bool WriteLyrics::isHiraganaOnly(const String& text) const
 {
 	for (const auto& ch : text)
 	{
@@ -94,7 +94,7 @@ bool Scene2::isHiraganaOnly(const String& text) const
 }
 
 // 🎵 「ー」を直前の母音（あいうえお）に変換
-String Scene2::replaceChoonWithVowel(const String& text) const
+String WriteLyrics::replaceChoonWithVowel(const String& text) const
 {
 	String result;
 
@@ -127,7 +127,7 @@ String Scene2::replaceChoonWithVowel(const String& text) const
 	return result;
 }
 
-void Scene2::update()
+void WriteLyrics::update()
 {
 	// ✅ どこからでも呼べる全体集計 + 遷移
 	auto finalizeAndExit = [&]()
@@ -155,7 +155,7 @@ void Scene2::update()
 			}
 			getData().fullLyrics = reconstructedLyrics;
 
-			changeScene(U"Scene1", 0.3s);
+			changeScene(U"VocalSynthesis", 0.3s);
 		};
 
 	if (m_showCountdown)
@@ -335,7 +335,7 @@ void Scene2::update()
 	}
 }
 
-void Scene2::draw() const
+void WriteLyrics::draw() const
 {
 	ClearPrint();
 

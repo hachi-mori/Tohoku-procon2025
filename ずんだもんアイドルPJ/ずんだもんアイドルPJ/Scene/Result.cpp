@@ -76,7 +76,7 @@ void Result::update()
 
 	if (ButtonAt(titleButtonCenter, titleButtonSize))
 	{
-		changeScene(U"Scene3", 0.3s);
+		changeScene(U"Title", 0.3s);
 	}
 
 	if (!getData().instAudio.isPlaying()) {

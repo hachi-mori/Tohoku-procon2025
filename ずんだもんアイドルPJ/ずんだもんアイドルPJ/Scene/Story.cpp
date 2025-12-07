@@ -9,7 +9,7 @@ Story::Story(const InitData& init)
 void Story::update()
 {
 	if (MouseL.down()) {
-		changeScene(U"Scene3", 0.3s);
+		changeScene(U"Title", 0.3s);
 	}
 	Cursor::RequestStyle(CursorStyle::Hand);
 }

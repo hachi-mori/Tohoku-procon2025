@@ -1,11 +1,11 @@
-﻿#include "Scene3.hpp"
+﻿#include "Title.hpp"
 
-Scene3::Scene3(const InitData& init)
+Title::Title(const InitData& init)
 	: IScene{ init }
 {
 	initVVProjList();
 	if (not getData().voicevoxCheckedFlag) urlBox.text = U"http://localhost:50021";
-	checkVVVersion();
+	if (not getData().voicevoxCheckedFlag) checkVVVersion();
 
 	// --- モニタ情報を取得 ---
 	const Array<MonitorInfo> monitors = System::EnumerateMonitors();
@@ -27,13 +27,9 @@ Scene3::Scene3(const InitData& init)
 	{
 		Window::SetFullscreen(true, currentMonitorIndex);
 	}
-
-	//Print << U"モニタ名: " << monitor.name;
-	//Print << U"モニタサイズ: " << monitorSize;
-	//Print << U"フルスクリーン: " << Window::GetState().fullscreen;
 }
 
-void Scene3::initVVProjList()
+void Title::initVVProjList()
 {
 	const FilePath scoreDir = U"Score";
 
@@ -48,7 +44,7 @@ void Scene3::initVVProjList()
 	listBoxStateVV = ListBoxState{ vvprojNames };
 }
 
-void Scene3::checkVVVersion() {
+void Title::checkVVVersion() {
 	getData().baseURL = urlBox.text;
 	const String version = VOICEVOX::GetEngineVersion(getData().baseURL, 1s);
 
@@ -65,7 +61,7 @@ void Scene3::checkVVVersion() {
 	}
 }
 
-void Scene3::update()
+void Title::update()
 {
 	if (listBoxStateVV.selectedItemIndex)
 	{
@@ -118,7 +114,7 @@ void Scene3::update()
 				}
 			}
 
-			changeScene(U"Scene2", 0.3s);
+			changeScene(U"WriteLyrics", 0.3s);
 		}
 		else
 		{
@@ -140,7 +136,7 @@ void Scene3::update()
 
 }
 
-void Scene3::draw() const
+void Title::draw() const
 {
 	background.draw();
 

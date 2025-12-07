@@ -119,9 +119,9 @@
     <ClCompile Include="Scene\Credit.cpp" />
     <ClCompile Include="Scene\Howtoplay.cpp" />
     <ClCompile Include="Scene\Result.cpp" />
-    <ClCompile Include="Scene\Scene1.cpp" />
-    <ClCompile Include="Scene\Scene2.cpp" />
-    <ClCompile Include="Scene\Scene3.cpp" />
+    <ClCompile Include="Scene\VocalSynthesis.cpp" />
+    <ClCompile Include="Scene\WriteLyrics.cpp" />
+    <ClCompile Include="Scene\Title.cpp" />
     <ClCompile Include="Scene\Story.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -338,9 +338,9 @@
     <ClInclude Include="Scene\Credit.hpp" />
     <ClInclude Include="Scene\Howtoplay.hpp" />
     <ClInclude Include="Scene\Result.hpp" />
-    <ClInclude Include="Scene\Scene1.hpp" />
-    <ClInclude Include="Scene\Scene2.hpp" />
-    <ClInclude Include="Scene\Scene3.hpp" />
+    <ClInclude Include="Scene\VocalSynthesis.hpp" />
+    <ClInclude Include="Scene\WriteLyrics.hpp" />
+    <ClInclude Include="Scene\Title.hpp" />
     <ClInclude Include="Scene\Story.hpp" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="VOICEVOX\VOICEVOX.hpp" />

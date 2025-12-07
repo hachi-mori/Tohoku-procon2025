@@ -2,11 +2,11 @@
 # include "../Common.hpp"
 
 // ゲームシーン
-class Scene1 : public App::Scene
+class VocalSynthesis : public App::Scene
 {
 public:
 
-	Scene1(const InitData& init);
+	VocalSynthesis(const InitData& init);
 
 	void update() override;
 
