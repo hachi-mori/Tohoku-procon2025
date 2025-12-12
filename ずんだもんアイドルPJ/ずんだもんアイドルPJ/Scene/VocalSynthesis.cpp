@@ -110,7 +110,7 @@ void VocalSynthesis::update()
 		}
 
 		//Console << U"音声合成が完了しました";
-		changeScene(U"Result", 0.3s);
+		changeScene(U"Result", 0.1s);
 	}
 }
 

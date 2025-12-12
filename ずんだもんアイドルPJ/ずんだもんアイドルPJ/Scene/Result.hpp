@@ -45,6 +45,6 @@ private:
 
 	Texture titleButton{ Resource(U"Texture/assets/button/title.png") };
 	double titleButtonScale = 1.0;
-	Vec2 titleButtonCenter = Scene::Center().movedBy(-850, 440);
+	Vec2 titleButtonCenter = Scene::Center().movedBy(-850, 420);
 	SizeF titleButtonSize = titleButton.size() * (titleButtonScale - 0.05);	// 画像スケールから少しだけ小さくする
 };

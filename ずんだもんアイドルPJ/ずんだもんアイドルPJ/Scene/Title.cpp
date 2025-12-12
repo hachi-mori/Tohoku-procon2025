@@ -4,8 +4,8 @@ Title::Title(const InitData& init)
 	: IScene{ init }
 {
 	initVVProjList();
-	if (not getData().voicevoxCheckedFlag) urlBox.text = U"http://localhost:50021";
-	if (not getData().voicevoxCheckedFlag) checkVVVersion();
+	urlBox.text = U"http://localhost:50021";
+	checkVVVersion();
 
 	// --- モニタ情報を取得 ---
 	const Array<MonitorInfo> monitors = System::EnumerateMonitors();
@@ -75,8 +75,6 @@ void Title::update()
 			getData().vvprojPath = *selectedVVProjPath;
 			getData().songTitle = FileSystem::BaseName(*selectedVVProjPath);
 			getData().baseURL = urlBox.text;
-
-			getData().voicevoxCheckedFlag = true;
 			const String version = VOICEVOX::GetEngineVersion(getData().baseURL, 1s);
 			// Print << U"🎤 VOICEVOX Engine Version: " << version;
 			// VOICEVOX の接続状態とバージョンを確認
@@ -160,8 +158,8 @@ void Title::draw() const
 	// フォーカス状態の前回値を取得（TextBox 描画の前に！）
 	urlBoxPrevious = urlBox.active;
 
-	// テキストボックス描画（ここで active が更新される）
-	if (not getData().voicevoxCheckedFlag)SimpleGUI::TextBoxAt(urlBox, Vec2{ 160, 110 }, 300);
+	// テキストボックス描画
+	SimpleGUI::TextBoxAt(urlBox, Vec2{ 160, 110 }, 300);
 
 	// ↓ここで状態の変化を検出
 	if (urlBoxPrevious && (urlBox.active == false))
