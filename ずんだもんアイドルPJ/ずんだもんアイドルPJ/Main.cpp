@@ -10,7 +10,7 @@
 void Main()
 {
 	// タイトルとウィンドウ設定
-	Window::SetTitle(U"おさかな呼び込みずんだもん");
+	Window::SetTitle(U"シングリンク");
 	const Size targetSize{ 1920, 1080 };
 	Window::Resize(targetSize);
 	Scene::SetResizeMode(ResizeMode::Keep);
